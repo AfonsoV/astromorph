@@ -5,7 +5,7 @@ import numpy as np
 import configparser
 
 config = configparser.ConfigParser()
-config.read("pyfado/pyfado.cfg")
+config.read("astromorph/astromorph.cfg")
 
 Obar = float(config["cosmology"]["Obar"])
 Omat = float(config["cosmology"]["Omat"])
