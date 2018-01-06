@@ -1,1 +1,6 @@
 astromorph/__pycache__
+
+# SetupTools Folders
+build/
+dist/
+astromorph.egg-info/

@@ -2,18 +2,16 @@ from scipy.integrate import simps
 import astropy.constants as const
 import astropy.units as u
 import numpy as np
-import configparser
+from .config import ConfigFile
 
-config = configparser.ConfigParser()
-config.read("astromorph/astromorph.cfg")
 
-Obar = float(config["cosmology"]["Obar"])
-Omat = float(config["cosmology"]["Omat"])
-Ok = float(config["cosmology"]["Ok"])
-Orad = float(config["cosmology"]["Orad"])
-Ow = float(config["cosmology"]["Ow"])
-w = float(config["cosmology"]["w"])
-H0 = float(config["cosmology"]["H0"])
+Obar = float(ConfigFile["cosmology"]["Obar"])
+Omat = float(ConfigFile["cosmology"]["Omat"])
+Ok = float(ConfigFile["cosmology"]["Ok"])
+Orad = float(ConfigFile["cosmology"]["Orad"])
+Ow = float(ConfigFile["cosmology"]["Ow"])
+w = float(ConfigFile["cosmology"]["w"])
+H0 = float(ConfigFile["cosmology"]["H0"])
 
 
 Msun=const.M_sun              #kg
