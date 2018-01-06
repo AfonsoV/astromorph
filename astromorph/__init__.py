@@ -4,5 +4,5 @@ from . import utils
 from . import CAS
 
 
-VERSION = [int(i) for i in ConfigFile["package"]["version"].split(".")]
-__version__ = "%i.%i.%i"%(VERSION[0],VERSION[1],VERSION[2])
+__version__ = ConfigFile["package"]["version"]
+VERSION = [int(i) for i in __version__.split(".")]
