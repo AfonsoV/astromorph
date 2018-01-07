@@ -14,7 +14,7 @@ This package includes a module to run [GALFIT](https://users.obs.carnegiescience
 A list of implemented non-parametric statistics:
 * CAS - [Conselice (2003)](http://adsabs.harvard.edu/abs/2004AJ....128..163L)
 * Gini-M20 - [Lotz et al. (2004)](http://adsabs.harvard.edu/abs/2004AJ....128..163L)
-* \Psi,I - [Law et al. (2007)](http://adsabs.harvard.edu/abs/2007ApJ...656....1L)
+* $\Psi$,I - [Law et al. (2007)](http://adsabs.harvard.edu/abs/2007ApJ...656....1L)
 * F - [Matsuda et al. (2011)](http://adsabs.harvard.edu/abs/2011MNRAS.410L..13M)
 * MID - [Freeman et al. (2013)](http://adsabs.harvard.edu/abs/2013MNRAS.434..282F)
 * T - [Ribeiro et al. (2016)](http://adsabs.harvard.edu/abs/2016A%26A...593A..22R)
