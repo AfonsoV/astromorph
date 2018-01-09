@@ -1206,6 +1206,16 @@ def sky_patch(img,segmap,stamp_shape,**kwargs):
         additional keyword arguments are passed to outlier_detection
     Returns
     -------
+    sky_img : float, array
+        As image patch containing an empty sky region.
+
+    outlier_map : int, array
+        A binary mask flaggin all pixels which are outliers with respect to
+        their neighbours.
+
+    See also
+    ----------
+    outlier_detection
 
     References
     ----------
@@ -1313,13 +1323,40 @@ def dist(x1,y1,x2,y2):
     return np.sqrt((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2))
 
 def find_clean_sky(img,nx,ny,nmax,map_sky):
-    r"""
+    r""" Attemps to find a contiguous empty sky region of size [nx,ny], by
+    randomly searching regions a total of nmax times. If no such region is found
+    returns the last attempt. You can check the success of this function by
+    comparing the outpu n to the input nmax.
 
     Parameters
     ----------
+    img : float, array
+        The image array containing the data
+
+    nx : int
+        Number of pixels in horizontal direction
+
+    ny : int
+        Number of pixels in vertical direction
+
+    nmax : int
+        Maximum number of tries for contiguous sky region search
+
+    map_sky : int, array
+        A binary image array flagging all pixels belonging to a detected object.
+        All values above 0 are considered as positive detections.
 
     Returns
     -------
+    n : int
+        the number of tries it took to find an empty sky region.
+
+    xr: int
+        the center coordinate (horizontal axis) of the found sky region.
+
+    yr : int
+        the center coordinate (vertical axis) of the found sky region.
+
 
     References
     ----------
@@ -1353,9 +1390,27 @@ def extract_sky(img,sides,map_sky,nmax=100,**kwargs):
 
     Parameters
     ----------
+    img : float, array
+        The image array containing the data
+
+    sides : int, tuple
+        The dimensions of the sky region to be extracted
+
+    nmax : int,optional
+        Maximum number of tries for contiguous sky region search
+
+    map_sky : int, array
+        A binary image array flagging all pixels belonging to a detected object.
+        All values above 0 are considered as positive detections.
+
+    Additional **kwargs are passed to sky_patch.
 
     Returns
     -------
+
+    sky_r : float, array
+        An array of the requested size with only sky pixels. If it cannot
+        find one, it will produced a random (non-contiguous) sky region.
 
     References
     ----------
@@ -1391,8 +1446,24 @@ def sky_region(fname,sides,sky_thresh=3.0,nmax=100):
     Parameters
     ----------
 
+    fname : string
+        The name of the image on which to run SExtractor
+
+    sides : int, tuple
+        The dimensions of the sky region to be extracted
+
+    sky_thresh : float, optional
+        Threshold to be passed to SExtractor.
+
+    nmax : int,optional
+        Maximum number of tries for contiguous sky region search. If it cannot
+        find one, it will produced a random (non-contiguous) sky region.
+
     Returns
     -------
+
+    sky_r : float, array
+        An array of the requested size with only sky pixels.
 
     References
     ----------
@@ -1429,7 +1500,7 @@ def sky_region(fname,sides,sky_thresh=3.0,nmax=100):
             all_sky=True
 
     if n>=nmax:
-        print("No cohesive region with np.size %s found! Sorting values for sky pixels!"%(str(sides)))
+        print("No cohesive region with size %s found! Sorting values for sky pixels!"%(str(sides)))
         sky_r=sky_patch(img,map_sky,sides)[0]
     else:
         sky_r=img[xr-nx/2:xr+nx/2+dx,yr-ny/2:yr+ny/2+dy]
@@ -1496,12 +1567,20 @@ def average_SNR(img,segmap):
 
 def define_structure(size):
     r"""
+    Returns a square array with a cross-shaped element of the given size. This
+    array is useful when used for binary morphological operations such as
+    erosion or dilation. Size must be an odd number greater or equal to three.
 
     Parameters
     ----------
+    size : int
+        The size of the desired struture element.
 
     Returns
     -------
+    circular : int, array
+        An array of shape [size,size] with an approximation of circular
+        geometry.
 
     References
     ----------
@@ -1524,25 +1603,40 @@ def define_structure(size):
     return structure
 
 
-def rebin2d(img,Nout,Mout,flux_scale=False):
+def rebin2d(img,size_out,flux_scale=False):
     r""" Special case of non-integer magnification for 2D arrays
     from FREBIN of IDL Astrolib.
 
     Parameters
     ----------
+    img : float, array
+        The image array containing the data
+
+    size_out : int, tuple
+        A tuple containing the 2D dimensions of the desired output array.
+
+    flux_scale : bool, optional
+        If true, the flux of the outpu image is scaled by the area of its array.
+        Else, all flux is preserved.
 
     Returns
     -------
 
+    img_bin : float, array
+        the input image resized to match the diemnsions of size_out.
+
     References
     ----------
+    http://www.harrisgeospatial.com/docs/frebin.html
 
     Examples
     --------
 
     """
+    assert len(size_ou)==2, "size_out must have two elements"
     N,M = img.shape
 
+    Nout,Mout = size_out
     xbox = N/float(Nout)
     ybox = M/float(Mout)
 
