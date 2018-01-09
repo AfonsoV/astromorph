@@ -5,65 +5,44 @@ import numpy as np
 import scipy.ndimage as snd
 import astropy.io.fits as pyfits
 
-""" CODE TO COMPUTE CAS STATS (Conselice et al. 2003)
-26/08/2013  - Creation of separate document, modules imported separately
-28/08/2013  - Distance calc made by external function on mod_imports
-            - Petrosian radius implementation (elliptical aperture and optimization needed)
-            - Segmentation map included in calc of A and S
-29/08/2013  - Add description to functions
-            - Improve S to take into account background and to zero out negative flux values.
-            - IRAF rotate routine for computation of rotated image implemented
-            - Sum of absolute values of original image on CAS_A
-            - rotate_iraf previously generates segmapped galaxy image
-04/09/2013  - compute distance_matrix on petrosian radius using image cuts centered at xc,yc
-05/09/2013  - deal with image borders on petrosian_rad
-            - Concentration parameter computed with respect to 1.5 times the petrosian radius
-06/09/2013  - Elliptical Apeertures within petrosian radius calculations
-            - Added code for visualization of elliptical annulus and apertures in each step of the petro_rad calc (now commented)
-            - Correction on Ellipse formula (check later dependence on theta)
-10/09/2013  - Angle in petrosian radius determination is now the same as input and not 90-theta_in (transformations done prior to this)
-17/09/2013  - Petrosian radius computed in fractional steps
-            - Default axis ratio value set to different than zero
-19/09/2013  - Small change in way to compute S (now using distance matrix to select excluded pixels)
-            - Negative values are set to 0 prior to computing clumpiness parameter
-20/09/2013  - Added interpolant option to IRAF rotate rotine
-            - Alteration on CAS_A to perform Asymmetry minimization (see Conselice 2000 for details)
-            - Minimization of the A parameter implemented on find_center_asymmetry
-            - Asymmetry function computes A, and CAS_A computes the minimum value for A by minimizing to the best center.
-25/09/2013  - Concentration parameter computed using smaller steps
-02/10/2013  - change from os.system to subprocess.check_call to avoid printing errors to shell
-10/10/2013  - change in CAS_C to compute flux within elliptical apertures using a distance atrix
-14/10/2013  - OPTIMIZATION: compute x*x instead of x**2
-04/11/2013  - OPTIMIZATION: changes in Anel function for a 200 faster time of computation
-05/11/2013  - New method to find minimum of asymmetry based on section 3.3 of Conselice & Bershady (2000)
-            - Alteration on A parameter to faster method of minimation mentioned above
-            - Created boxcar_filter function to apply to 2d np.arrays by replacing the value of a pixel by the np.mean of its neighbours defined by the box np.size.
-            - Alteration on S parameter to properly account for sky subtraction.
-06/11/2013  - Small glitch corrected now on petrosian radius due to nan values arising from small radii
-07/11/2013  - Do not use segmentation map on computation of A and S
-            - Remove segmap from all S and A related functions
-20/07/2014  - Added flags on petrosian radius computation for controlling the 'border reach effect'
-            - Change in concentraion computation to avoid ZeroDivisionError when r20 is zero. Now r20 defaults to 1e-10
-22/07/2014  - Added Asymmetry/Clumpiness galaxy and Asymmetry/Clumpiness sky to output of the CAS
-23/07/2014  - Added cycle on Sky assymetry to smooth the value of A_sky and provide a more robust estimation of Asymmetry
-17/09/2014  - Added minimum width value of 2 pixel for boxcar_filter
-14/11/2014  - Incorporated segmentation map into CAS_A to save time in computing the extracted sky region and avoid multiple computations in the extract_sky function
-"""
 
 ####################################################################################################
 #                                           ASYMMETRY                                                  #
 ###################################################################################################
 
-def rotate_180(img):
-    """ Simple horizontal and vertical flip of the given image."""
-    N,M=img.shape
-    R=np.zeros([N,M])
-    for i in range(N):
-        for j in range(M):
-            R[N-1-i,M-1-j]=img[i,j]
-    return R
-
 def rotate_scipy(img,xc,yc,angle=180.0):
+    r""" Rotate an image around (xc,yc) by the given angle.
+
+    Parameters
+    ----------
+    img : float, array
+        The image array containing the data.
+
+    xc : float
+        the horizontal coordinate (in pixel)
+
+    yc : float
+        the vertical coordinate (in pixel)
+
+    angle : float, optional
+        the angle to rotate the image.
+
+    Returns
+    -------
+
+    shifted : float, array
+        The image shifted so its center matches xc,yc
+
+    rotated : float, array
+        The image afer translation and rotation.
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     N,M=img.shape
     X,Y=(N-1)/2,(M-1)/2
     dx=(xc-X)
@@ -71,10 +50,25 @@ def rotate_scipy(img,xc,yc,angle=180.0):
     gal=img.copy()
     shifted = snd.shift(gal,[-dx,-dy])
     rotated = snd.rotate(shifted,angle)
-##    imshow(rotated);show()
+
     return shifted,rotated
 
 def Asymmetry_scipy(center,img,sky=None,angle=180):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Compute the asymmetry statistic from CAS."""
     xc,yc=center
     O = img
@@ -91,6 +85,21 @@ def Asymmetry_scipy(center,img,sky=None,angle=180):
     return A
 
 def find_center_minA(img,angle=180,sky=None):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     N,M=img.shape
 
     As=2*np.ones(img.shape)
@@ -102,12 +111,41 @@ def find_center_minA(img,angle=180,sky=None):
     return xc,yc,np.amin(As)
 
 def CAS_A_scipy(img,sky=None,angle=180):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     xc,yc,A=find_center_minA(img,angle=angle,sky=sky)
     return A
 
 
 def rotate_iraf(img,xc,yc,angle=180):
-    """Rotates an image around (xc,yc) by angle using IRAF rotate routine."""
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     from pyraf import iraf
     gal = img
     XCen=xc+1
@@ -130,6 +168,21 @@ def rotate_iraf(img,xc,yc,angle=180):
     return R
 
 def Asymmetry(center,img,sky=None):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Compute the asymmetry statistic from CAS."""
     xc,yc=center
     O = img
@@ -157,6 +210,21 @@ def Asymmetry(center,img,sky=None):
 ##    return A
 
 def CAS_A(center,img,nskytries,originalimage,originalsegmap,**kwargs):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ Computes the asymmetry statistic from CAS based on the minimum
     value of the image and the sky patch.
     """
@@ -181,6 +249,21 @@ def CAS_A(center,img,nskytries,originalimage,originalsegmap,**kwargs):
     return A,A_img,A_sky
 
 def test_min_A(img,center,sky=None):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     x0,y0=center
     N,M=img.shape
     xs = np.linspace(x0-N/4,x0+N/4)
@@ -209,6 +292,21 @@ def test_min_A(img,center,sky=None):
     return AS
 
 def find_center_asymmetry(img,center,func=Asymmetry,sky=None):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ Finds the center for which the value of A is  minimum.
     """
     res=sci_op.minimize(func,center,args=(img,sky),method='Nelder-Mead')
@@ -227,6 +325,21 @@ def find_center_asymmetry(img,center,func=Asymmetry,sky=None):
     return xc,yc,A
 
 def find_neighbour_min(AS,img,i,j,sky=None,func=Asymmetry,ssize=1):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ To find if any of the 8 adjacent pixels has lower asymmetry than
     A(i,j). If yes, return maximum value coordinate of neighbour pixel. If not,
     (i,j) is returned"""
@@ -264,6 +377,21 @@ def find_neighbour_min(AS,img,i,j,sky=None,func=Asymmetry,ssize=1):
     return maxi,maxj,AS
 
 def A_conselice(img,center,func,sky=None,ssize=1):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ Compute the Asymmetry of neighbour pixels until a local minima is
     found. Usually Asymmetry as one global minimum close to the center of the
     galaxy np.meaning that if sterted from a guessed galy center the local minima
@@ -293,6 +421,21 @@ def A_conselice(img,center,func,sky=None,ssize=1):
 
 
 def Anel(img,r,dmat,upp=1.1,low=0.9,draw_stuff=False):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Compute the flux with an annular region width width [0.8*r , 1.2*r] """
 
     stest=np.zeros(img.shape)
@@ -332,6 +475,21 @@ def Anel(img,r,dmat,upp=1.1,low=0.9,draw_stuff=False):
     return ann/npix
 
 def petrosian_rad(img,xc,yc,q=1.00,ang=0.00,eta=0.2,step=0.5,cutfact=2,npix_min=5,full_output=False,draw_stuff=False,verbose=False):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Compute the petrosian radius using circular apertures around the galaxy
     center (xc,yc)."""
     ri = np.sqrt(2)
@@ -408,12 +566,42 @@ def petrosian_rad(img,xc,yc,q=1.00,ang=0.00,eta=0.2,step=0.5,cutfact=2,npix_min=
 
 
 def flux(img,xc,yc,rad):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ Compute the flux within the radius rad."""
     dmat = utils.compute_ellipse_distmat(img,xc,yc)
     return np.sum(img[dmat<rad])
 
 
 def CAS_C(img,xc,yc,ba=1.00,theta=0.0,rp=None,dr0=0.1,rpstep=0.5,cutfact=1.1,draw_stuff=False):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Computes the concentration parameter from CAS based on the petrosian
     radius """
     if rp==None:
@@ -442,6 +630,21 @@ def CAS_C(img,xc,yc,ba=1.00,theta=0.0,rp=None,dr0=0.1,rpstep=0.5,cutfact=1.1,dra
 
 
 def CAS_S(img,xc,yc,sigma,skypatch=None):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Computes the clumpiness parameter from CAS by smoothin with a gaussian
     kernel with sigma width. Sigma should be around 0.3 the petrosian radius.
     """
@@ -486,6 +689,21 @@ def CAS_S(img,xc,yc,sigma,skypatch=None):
 
 
 def boxcar_filter2d(in_arr, width,height=None):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ Applies a boxcar filter to in_arr with dimensions [width x height]. If
     only width is provided then filter is assumed to be of square shape with size width.
     """
@@ -507,6 +725,21 @@ def boxcar_filter2d(in_arr, width,height=None):
 ###################################################################################################
 
 def test_all_functions():
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     t_array = np.ones([50,50])
     boxcar_filter2d(t_array,5,5)
 

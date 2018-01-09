@@ -345,7 +345,7 @@ def compute_ellipse_distmat(img,xc,yc,q=1.00,ang=0.00):
     X,Y = np.meshgrid(range(img.shape[1]),range(int(img.shape[0])))
     rX=(X-xc)*np.cos(ang_rad)-(Y-yc)*np.sin(ang_rad)
     rY=(X-xc)*np.sin(ang_rad)+(Y-yc)*np.cos(ang_rad)
-    dmat = (rX*rX+(1/(q*q))*rY*rY)
+    dmat = np.sqrt(rX*rX+(1/(q*q))*rY*rY)
     return dmat
 
 

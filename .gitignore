@@ -1,4 +1,5 @@
 astromorph/__pycache__
+astromorph/*.pyc
 
 # SetupTools Folders
 build/
