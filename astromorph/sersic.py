@@ -11,7 +11,7 @@ def dump_txt(table,instrument,band,catinfo,fname='results'):
     """ Function to dump the results from running ALL.py into an ascii table
     with all the morphological information.
     """
-    
+
     f=open("%s_%s_%s.txt"%(fname,instrument,band),'w')
     f.write('# ')
     for n in catinfo.keys():
@@ -33,7 +33,7 @@ def dump_txt(table,instrument,band,catinfo,fname='results'):
                 f.write("%.3f\t"%val)
         f.write("\n")
     f.close()
-    return 
+    return
 
 def bin_results(table_name,nbins=4):
     global zbins
@@ -44,7 +44,7 @@ def bin_results(table_name,nbins=4):
     """
     tab=genfromtxt(table_name,filling_values=nan)
     Z=tab[:,0]
-    
+
     zbins=linspace(min(Z),max(Z)+1e-10,num=nbins+1)
     indexs=[]
     for i in range(nbins):
@@ -65,11 +65,11 @@ def bin_results(table_name,nbins=4):
             CleanSample=CleanSample[isinf(CleanSample)==False]
             medpars[i,j-skip_cols]=mean(CleanSample)
             devpars[i,j-skip_cols]=std(CleanSample)
-   
+
     return zs,medpars,devpars,tab
 
 def morph_fraction(table):
-    
+
     zed = loadtxt(table,unpack=True,usecols=[3])
     gtype = loadtxt(table,unpack=True,usecols=[-1])
     compact=zed[gtype==0]
@@ -83,7 +83,7 @@ def morph_fraction(table):
     labels=['Compact','Cometary','Pair','Elongated','Multicore','Diffuse']
 
     ntypes=6
-    
+
     nbins=8
     zbins=linspace(min(zed),max(zed)+1e-10,num=nbins+1)
     zs=[]
@@ -106,7 +106,7 @@ def morph_fraction(table):
     for l in range(nbins):
         ntot[l]=sum(a[l,:])
 
-    
+
     for i in range(1):
         plot(zs,a[:,i]/ntot,'o-',label=labels[i])
 
@@ -123,7 +123,7 @@ def morph_fraction(table):
     savefig('%s/number_fraction_shaded.png'%tabledir,format='png')
     show()
 
- 
+
 def test_binning_plots():
     zbins,MP,DP,tab=bin_results('results_acs_I.txt')
     for k in range(1,15):
@@ -195,12 +195,12 @@ def test_binning_plots():
 ##        As.append([new_type[i],table[i,16]])
 ##    sizes=[]
 ##    for a in As:
-##        sizes.append(len(where(array(As)==a)[0]))            
+##        sizes.append(len(where(array(As)==a)[0]))
 ##
 ##
 ##    scatter(table[:,16],new_type,s=sizes)
 ##    show()
-        
+
 table='%s/vuds_milano_table.txt'%tabledir
 morph_fraction(table)
 
@@ -291,15 +291,13 @@ if __name__=='__main__':
 #################################################################################
 ##    plane_plot(labels[:-1],12,14,pars,colors,log=True)
 ##    plane_plot_mean(labels[:-1],12,14,pars,colors,log=True)
-###################################################################################    
+###################################################################################
 ##    plane_plot(labels[:-1],19,16,pars,colors,log=True)
 ##    plane_plot_mean(labels[:-1],19,16,pars,colors,log=True)
-###################################################################################    
+###################################################################################
     plane_plot(labels[:-1],14,16,pars,colors,log=True)
     plane_plot_mean(labels[:-1],14,16,pars,colors,log=True)
-###############################################################################    
+###############################################################################
 
 
 ##    n=7;plot(table[:,n],table2[:,n],'o');print n;plot(table2[:,n],table2[:,n],'k--');xlabel(pars[n]+' I-band');ylabel(pars[n]+' H-band');show()
-
-
