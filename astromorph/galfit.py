@@ -85,7 +85,7 @@ def galaxy_maker_galfit(mag_zpt,xsize,ysize,model,xc,yc,pars,theta,sky=0):
         write_object(f,'expdisk',xc,yc,mag_d,rd,1.0,ba,theta_d,1)
         write_object(f,'devauc',xc,yc,mag_b,rb,4.0,ba,theta_b,2)
     else:
-        print 'model %s does not exist, please choose from: sersic,expdisk, devauc or compost.'
+        raise ValueError('model %s does not exist, please choose from: sersic,expdisk, devauc or compost.')
         return None
 
     f.close()
