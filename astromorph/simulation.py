@@ -10,9 +10,11 @@ from scipy.special import gamma
 from scipy.integrate import simps
 from scipy.ndimage import label
 
-import matplotlib.ticker as mpt
 import matplotlib.pyplot as mpl
+import matplotlib.ticker as mpt
 import matplotlib.patches as mpa
+
+from astropy.convolution import convolve,Gaussian2DKernel,Moffat2DKernel
 
 from . import utils
 
@@ -221,9 +223,15 @@ def test_sersic():
     return
 
 ##
-def galaxy_creation(imsize,xc,yc,I,r,n,q,theta):
+def galaxy_creation(imsize,xc,yc,I,r,n,q,theta,psf=None,**kwargs):
     R = utils.compute_ellipse_distmat(np.zeros(imsize),xc,yc,q,theta)
-    galaxy=sersic(R,I,r,n)
+    profile = sersic(R,I,r,n)
+
+    if psf is None:
+        galaxy = profile
+    else:
+        galaxy = convolve(profile, psf)
+
     return galaxy
 
 def profile(img,xc,yc,re,out_fact=5):
@@ -609,5 +617,22 @@ def test_max_intensity():
 ##test_max_intensity()
 
 ######################################################################
-###################################################################### General GALFIT
+###################################################################### General PSF
 ######################################################################
+
+def create_gaussian_PSF(fwhm,**kwargs):
+    sigma = fwhm/(2*np.sqrt(2*np.log(2)))
+    return Gaussian2DKernel(sigma,**kwargs)
+
+def create_moffat_PSF(gamma,alpha,**kwargs):
+    return Moffat2DKernel(gamma,alpha,**kwargs)
+
+######################################################################
+###################################################################### General Noise
+######################################################################
+
+def create_gaussian_sky(shape,stddev,mean=0):
+    return rdm.normal(mean*np.ones(shape),stddev)
+
+def poissonFilter(model,gain,exposure_time=1):
+    return rdm.poisson(model*exposure_time*gain)/gain

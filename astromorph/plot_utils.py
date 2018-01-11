@@ -306,3 +306,15 @@ def draw_segmap_border(eixo,segmap,pixscale=-99,color='red',lw=2,distinct=False,
         eixo.add_artist(P)
 
     return
+
+
+def show_image(axes,data,scale="linear",minflux=1e-10,**kwargs):
+    if scale == "linear":
+        axes.imshow(data,**kwargs)
+    elif scale == "sqrt":
+        axes.imshow(np.sqrt(data-data.min()+minflux),**kwargs)
+    elif scale == "log":
+        axes.imshow(np.log10(data-data.min()+minflux),**kwargs)
+    else:
+        raise ValueError("scale must be one of: linear, sqrt or log")
+    return
