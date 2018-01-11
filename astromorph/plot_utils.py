@@ -307,6 +307,13 @@ def draw_segmap_border(eixo,segmap,pixscale=-99,color='red',lw=2,distinct=False,
 
     return
 
+def draw_cross(eixo,x,y,gap=0.75,size=1.0,**kwargs):
+    eixo.plot([x,x],[y-gap,y-gap-size],**kwargs)
+    eixo.plot([x,x],[y+gap,y+gap+size],**kwargs)
+    eixo.plot([x-gap,x-gap-size],[y,y],**kwargs)
+    eixo.plot([x+gap,x+gap+size],[y,y],**kwargs)
+    return None
+
 
 def show_image(axes,data,scale="linear",minflux=1e-10,**kwargs):
     if scale == "linear":

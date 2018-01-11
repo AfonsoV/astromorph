@@ -293,7 +293,7 @@ def get_center_coords(imgname,ra,dec,hsize=1,verify_limits=True):
     else:
         sky=np.array([[dec,ra]],np.float_)
 
-    pixcrd=wcs.wcs_sky2pix(sky,1)
+    pixcrd=wcs.wcs_world2pix(sky,1)
 
     xc=pixcrd[0,0]
     yc=pixcrd[0,1]
