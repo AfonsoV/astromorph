@@ -1,9 +1,13 @@
 import subprocess as sp
 import astropy.io.fits as pyfits
 
+def get_fixpars_default():
+    return {'x':1,'y':1,'m':1,'re':1,'n':1,'q':1,'pa':1,'sky':1}
+
 def write_object(f,model,x,y,m,re,n,ba,pa,num,fixpars=None):
-    if fixpars==None:
-        fixpars={'x':1,'y':1,'m':1,'re':1,'n':1,'q':1,'pa':1}
+    if fixpars is None:
+        fixpars=get_fixpars_default()
+
     f.write("#Object number: %i\n"%num)
     f.write(' 0) %s             # Object type\n'%model)
     f.write(' 1) %6.4f %6.4f  %i %i    # position x, y        [pixel]\n'%(x,y,fixpars['x'],fixpars['y']))
@@ -17,9 +21,14 @@ def write_object(f,model,x,y,m,re,n,ba,pa,num,fixpars=None):
     return
 
 
-def galfit_input_file(f,magzpt,sky,xsize,ysize,sconvbox,pixscale,imgname='galaxy.fits',outname="results.fits",psfname='psf.fits',maskname="none",signame='none',fixpars=None):
-    if fixpars==None:
-        fixpars={'sky':1}
+def input_file(f,magzpt,sky,x_range,y_range,sconvbox,pixscale,imgname='galaxy.fits',outname="results.fits",psfname='psf.fits',maskname="none",signame='none',fixpars=None):
+    if fixpars is None:
+        fixpars=get_fixpars_default()
+
+    assert len(x_range)==len(y_range)==2,"x_range,y_range must have two elements"
+    assert x_range[1]>x_range[0],"x_range must be sorted in ascendent order"
+    assert y_range[1]>y_range[0],"y_range must be sorted in ascendent order"
+
     f.write("================================================================================\n")
     f.write("# IMAGE and GALFIT CONTROL PARAMETERS\n")
     f.write("A) %s         # Input data image (FITS file)\n"%imgname)
@@ -29,7 +38,7 @@ def galfit_input_file(f,magzpt,sky,xsize,ysize,sconvbox,pixscale,imgname='galaxy
     f.write("E) 1                   # PSF fine sampling factor relative to data \n")
     f.write("F) %s                # Bad pixel mask (FITS image or ASCII coord list)\n"%maskname)
     f.write("G) none                # File with parameter constraints (ASCII file) \n")
-    f.write("H) 1    %i   1    %i # Image region to fit (xmin xmax ymin ymax)\n"%(xsize+1,ysize+1))
+    f.write("H) %i    %i   %i    %i # Image region to fit (xmin xmax ymin ymax)\n"%(x_range[0],x_range[1],y_range[0],y_range[1]))
     f.write("I) %i    %i          # Size of the convolution box (x y)\n"%(sconvbox,sconvbox))
     f.write("J) %7.5f             # Magnitude photometric zeropoint \n"%magzpt)
     f.write("K) %.3f %.3f        # Plate scale (dx dy)   [arcsec per pixel]\n"%(pixscale,pixscale))
@@ -68,7 +77,7 @@ def galfit_input_file(f,magzpt,sky,xsize,ysize,sconvbox,pixscale,imgname='galaxy
     return
 
 
-def galaxy_maker_galfit(mag_zpt,xsize,ysize,model,xc,yc,pars,theta,sky=0):
+def galaxy_maker(mag_zpt,xsize,ysize,model,xc,yc,pars,theta,sky=0):
     f=open('galfit_object.temp','w')
     if model=='sersic':
         mag,re,n,q = pars
@@ -90,7 +99,7 @@ def galaxy_maker_galfit(mag_zpt,xsize,ysize,model,xc,yc,pars,theta,sky=0):
 
     f.close()
     f1=open('GALFIT_input','w')
-    galfit_input_file(f1,mag_zpt,sky,xsize,ysize,xsize,1,imgname="model.fits")
+    input_file(f1,mag_zpt,sky,xsize,ysize,xsize,1,imgname="model.fits")
     f1.close()
     sp.call('galfit -o1 GALFIT_input >> galfit.log',shell=True)
     galaxy=pyfits.getdata('model.fits')
@@ -121,7 +130,7 @@ def make_psf(mzpt,FWHM=3):
     root=os.getcwd()
 
     f=open('galfit_psf.txt','w')
-    galfit_input_file(f,mzpt,0.0,imsize,imsize,0,1,imgname='psf',maskname=False)
+    input_file(f,mzpt,0.0,imsize,imsize,0,1,imgname='psf',maskname=False)
     f.close()
 
     sp.call('galfit -o1 galfit_psf.txt >> galfit.log',shell=True)
