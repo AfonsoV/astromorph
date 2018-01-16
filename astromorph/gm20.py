@@ -1,11 +1,11 @@
-from mod_imports import *
+from . import utils
 
 
 """ CODE TO COMPUTE Gini Coefficient and Moment of Light Stats (Lotz et al. 2004)
 26/08/2013  - Beggining of functions gini, Mtot, find_center, M20
             - Need to check why minimize dos not converge quickly in find_center (check methods available on help, quicker is Nelder-Mead, bounds do not improve performance)
             - Gini Coeff. values probably unerstimated (Maybe due to small segmentation map)
-27/08/2013  - Added test_minimize_m to visualize the function to minimize to get the galaxy center           
+27/08/2013  - Added test_minimize_m to visualize the function to minimize to get the galaxy center
 29/08/2013  - Added test_gini to compute G in ideal cases
             - Select flux pixels based on segmap>0 values and not gal>0 values on Gini and M20
             - Correction bug on Mtot and M20, compute distances using i,j not i+1,j+1
@@ -34,7 +34,7 @@ def Gini(img,segmap):
     Sum=0
     for i in range(Npix):
         Sum+=(2*(i+1)-Npix-1)*abs(fluxs[i])
-        
+
     G = Sum/(AveFlux*Npix*(Npix-1))
     return G
 
@@ -48,9 +48,9 @@ def test_gini():
     Dmat,dist=distance_matrix(N/2-1,M/2-1,Tmap)
     Timg[24,24]=1
     Tmap[Dmat<5]=1
-    print "Single pixel galaxy: G=%.2f"%Gini(Timg,Tmap)
+    print("Single pixel galaxy: G=%.2f"%Gini(Timg,Tmap))
     Timg[Dmat<5]=1
-    print "Uniform pixel galaxy: G=%.2f"%Gini(Timg,Tmap)    
+    print("Uniform pixel galaxy: G=%.2f"%Gini(Timg,Tmap))
     return
 
 
@@ -67,7 +67,7 @@ def Mtot(cen,img,segmap):
 
     XX,YY=np.meshgrid(range(M),range(N))
     dX=XX-xc
-    dY=YY-yc    
+    dY=YY-yc
     Mtot_image = gal * (dX*dX+dY*dY)
 
     return np.sum(Mtot_image)
@@ -84,7 +84,7 @@ def find_center_mtot(img,segmap,x0,y0,verbose=False):
         mtot=Mtot([x0,y0],img,segmap)
         mtot_flag=1
         if verbose:
-            print bold_colorylw.format('Warning! No miminimum found for center in total momentum computation.\n Setting center to initial guess.')
+            print('Warning! No miminimum found for center in total momentum computation.\n Setting center to initial guess.')
     return xc,yc,mtot,mtot_flag
 
 def MomentLight20(img,segmap,x0=100,y0=100,verbose=False):
@@ -96,7 +96,7 @@ def MomentLight20(img,segmap,x0=100,y0=100,verbose=False):
     fluxes=gal[segmap>0]
     fluxes=np.sort(fluxes)
     ftot=np.sum(fluxes)
-    
+
     sumF=fluxes[-1]
     sumM=0
     i=-1
@@ -113,13 +113,13 @@ def MomentLight20(img,segmap,x0=100,y0=100,verbose=False):
 
     if sumM==0:
         sumM=np.array([sumF])
-    
+
     m20=np.log10(sumM/mtot)
     try:
         return m20[0],mtot_flag
     except IndexError as err:
         return m20,mtot_flag
-    
+
 def test_minimize_m(img,segmap):
     """Function to plot the 2D distribution of Mtot for different pairs of (x,y)
     to investigate if minimize is picking the right solution"""

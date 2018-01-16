@@ -3,6 +3,7 @@ import matplotlib
 import matplotlib.pyplot as mpl
 import matplotlib.colors as clr
 from matplotlib.patches import Rectangle,Ellipse,Circle,Polygon
+import scipy.ndimage as sci_nd
 
 def make_subplot(nrows,ncols,fignum=10,width=20,height=8):
     r"""
@@ -259,7 +260,7 @@ def vertices(segmap,direction):
 
 
 
-def draw_segmap_border(eixo,segmap,pixscale=-99,color='red',lw=2,distinct=False,direction='y'):
+def draw_segmap_border(eixo,segmap,pixscale=-99,color='red',lw=2,distinct=False,direction='y',cmap="inferno",**kwargs):
     r"""
 
     Parameters
@@ -277,34 +278,21 @@ def draw_segmap_border(eixo,segmap,pixscale=-99,color='red',lw=2,distinct=False,
     """
     """ Rotine to draw the borders of the segmentation map in axes eixo.
     """
-    Regions,Nregions=sci_nd.label(segmap)
-    if distinct:
-        a=np.linspace(0,1,np.amax(segmap))
+
+
+    if not distinct:
+        eixo.contour(segmap.astype(np.int),levels=[0.5],colors=color,**kwargs)
+    else:
         import random as rdm
-        rdm.shuffle(a)
-        segvals=[]
-
-    for n in range(1,Nregions+1):
-        A=np.zeros(Regions.shape)
-        A[Regions==n]=1
-        ymins=np.array(vertices(A,direction=direction))
-
-        if pixscale!=-99:
-            ymins-=Regions.shape[0]/2.0
-            ymins*=pixscale
-
-        if distinct:
-            segval=np.amax(segmap[Regions==n])
-            if segval in segvals:
-                pass
-            else:
-                segvals.append(segval)
-
-            P=Polygon(ymins,fill=False,color=cm.hsv(a[segval-1]),linewidth=lw)
-        else:
-            P=Polygon(ymins,fill=False,color=color,linewidth=lw)
-        eixo.add_artist(P)
-
+        Regions,Nregions=sci_nd.label(segmap)
+        colormap = matplotlib.cm.get_cmap(cmap)
+        colors = np.linspace(0,1,Nregions)
+        rdm.shuffle(colors)
+        for i in range(1,Nregions+1):
+            smap = np.zeros(Regions.shape,dtype=np.int8)
+            smap[Regions==i] = 1
+            clr = colormap(colors[i-1])
+            eixo.contour(smap,levels=[0.5],colors = [clr],**kwargs)
     return
 
 def draw_cross(eixo,x,y,gap=0.75,size=1.0,**kwargs):

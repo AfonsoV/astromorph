@@ -1,5 +1,5 @@
-from mod_imports import *
-import gm20 as g
+from . import utils
+import numpy as np
 
 
 img=pyfits.getdata("acs1.fits")[130:210,120:200]
@@ -64,11 +64,11 @@ for VID in IDs:
     ginis[i]=g.Gini(img,smap)
     for j in range(len(alphas)):
         geis[i,j]=gen_entropy_index(img*smap,alphas[j])
-    
+
     i+=1
-    
+
 for i in range(len(alphas)):
     plot(ginis,geis[:,i],'s',label=r'$\alpha=%.1f$'%alphas[i])
-    
+
 legend(loc='best')
 show()

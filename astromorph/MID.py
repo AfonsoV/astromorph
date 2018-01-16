@@ -1,4 +1,5 @@
-from mod_imports import *
+from . import utils
+import numpy as np
 
 """ CODE TO COMPUTE MID STATISTICS (Newman et al 2013)
 
@@ -97,9 +98,9 @@ def find_neighbour_max(img,segmap,i,j):
     F(i,j). If yes, return maximum value coordinates of neighbour pixel.
     If not, (i,j) is returned"""
     gal = img * segmap
-    if gal[i,j]==0: 
+    if gal[i,j]==0:
         return -9,-9
-    
+
 #    if i>0 and j>0:
 #        neighbors = gal[i-1:i+2,j-1:j+2]
 #    if i>0 and j==0:
@@ -108,11 +109,11 @@ def find_neighbour_max(img,segmap,i,j):
 #        neighbors = gal[:i+2,j-1:j+2]
 #    if i==0 and j==0:
 #        neighbors = gal[:i+2,:j+2]
-#        
-#    maxi,maxj =  np.where(neighbors==np.amax(neighbors))    
+#
+#    maxi,maxj =  np.where(neighbors==np.amax(neighbors))
 #    if len(maxi)>1:
 #        raise ValueError("Two equal maxima!")
-#    
+#
 #    return maxi[0],maxj[0]
     maxi=i
     maxj=j
@@ -144,7 +145,7 @@ def local_maxims(img,segmap):
     """ Find all the local maxima associated with every pixel within the
     segmentation map and constructs the Group Intensity Map (a map describing)
     all the groups of pixels associated with every local maxima."""
-    
+
     imax,imin,jmax,jmin=find_ij(segmap)
 #    imax-=1
 #    jmax-=1
@@ -175,7 +176,7 @@ def intensity(Img,Imap,Segmap,LM):
         I=max(Is[Is<max(Is)])/max(Is)
     else:
         I=0
-        
+
     return I,LM[Is==max(Is)][0]
 
 def find_centroid(img,segmap):
@@ -190,5 +191,3 @@ def deviation(img,segmap,imax_center):
     x1,y1=imax_center
     nseg=np.size(segmap[segmap>0])
     return np.sqrt(np.pi/nseg)*np.sqrt((x1-xcen)**2+(y1-ycen)**2)
-
-

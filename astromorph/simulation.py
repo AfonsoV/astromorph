@@ -392,7 +392,7 @@ def rectangular_shape(a,b):
     b=int(b)
     side=max([a,b])
     I = np.zeros([side+2,side+2])
-    I[(side-a)/2+1:(side+a)/2+1,(side-b)/2+1:(side+b)/2+1]=1
+    I[(side-a)//2+1:(side+a)//2+1,(side-b)//2+1:(side+b)//2+1]=1
     return I
 
 def square_shape(l):
@@ -446,11 +446,6 @@ def polygon_shape(r,nverts,verts=None,clr='red'):
     XX,YY = np.meshgrid(range(2*r+2),range(2*r+2))
 
     polMask = pointsInPolygon(np.vstack([XX.ravel(),YY.ravel()]).T,poly)
-
-    mpl.imshow(polMask.reshape(XX.shape).astype(np.int),cmap='magma_r')
-    mpl.plot(poly[:,0],poly[:,1],'s:',color=clr)
-    mpl.xlim(0,2*r+1)
-    mpl.ylim(0,2*r+1)
     mpl.show()
     return I
 
@@ -480,13 +475,13 @@ def polygon_shape(r,nverts,verts=None,clr='red'):
 
 def gerate_combination(imsize,nshapes,rmax=10,types=['C','E','R','S','P'],intersect=True,nverts_lims=[5,10],Imax=1,profile=False,border=4,rmin=4):
 
-    if rmax>imsize/2:
+    if rmax>min(imsize)/2:
         raise ValueError("Maximum shape size greater than figure size!")
 
     shapes_func={'C':circ_shape,'E':ellipse_shape,\
                        'R':rectangular_shape,'S':square_shape,'P':polygon_shape}
 
-    canvas = np.zeros([imsize,imsize])
+    canvas = np.zeros(imsize)
     if not intersect:
         pixmap=np.zeros(canvas.shape)
     ntypes=len(types)
@@ -501,9 +496,9 @@ def gerate_combination(imsize,nshapes,rmax=10,types=['C','E','R','S','P'],inters
 
         T = choice(types)
         a,b = randint(rmin,rmax),randint(rmin,rmax)
-        r = max(a,b)/2
+        r = max(a,b)//2
 
-        x,y = randint(a/2+border,imsize-a/2-border),randint(b/2+border,imsize-b/2-border)
+        x,y = randint(a//2+border,imsize[0]-a//2-border),randint(b//2+border,imsize[1]-b//2-border)
         I = randint(1,Imax)
         dtype=[('Type','S2'),('x',float),('y',float),('r',float),('a',float),('b',float),\
                ('q',float),('t',float),('N',int),('I',float),('n',float)]

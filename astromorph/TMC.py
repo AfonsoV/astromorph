@@ -1,6 +1,6 @@
-from mod_imports import *
-import cosmology as cosmos
-import hope
+from . import utils
+import numpy as np
+from . import cosmology as cosmos
 
 """ COMPUTE I,Psi,Xi parameters Law et al. 2007
 27/08/2013  - Beggining
@@ -14,7 +14,6 @@ import hope
 14/10/2013  - Corretion to light_potential due to IndexErrors induced by changes in find_ij
             - Light Potential now only computes pixels from segmap, skipping all zero values
 17/10/2013  - Correction on light potential to deal with sources clos to the border by settin X[gal==0]=-1
-14/11/2014  - Added hope.jit to optimize the computation time of the light_potential function through speeding the sum_all call
 """
 
 def Size(segmap,pixscale,z,pars=None):
@@ -24,7 +23,6 @@ def Size(segmap,pixscale,z,pars=None):
     I = N * pixscale**2 * 2.4e-11 * da**2
     return I
 
-@hope.jit
 def sum_all(gal,X,Y,init,npoints):
     Sum=0.0
     for i in range(init,npoints):
@@ -38,7 +36,7 @@ def light_potential(img,segmap):
     gal=img*segmap
     N,M=gal.shape
     Y,X = np.meshgrid(range(M),range(N))
-    
+
     X[gal==0]=-1
     Y[gal==0]=-1
 
@@ -57,7 +55,7 @@ def light_potential(img,segmap):
 ##        Sum+=job_server.submit(sum_all,(gal,X,Y,s,nparts))()
 ##    print "Time elapsed: %f"%(time.time()-ts)
 ##
-##    ts=time.time()    
+##    ts=time.time()
 ##    Sum=sum_all(gal,X,Y,0,2)+sum_all(gal,X,Y,1,2)
 ##    print "Time elapsed: %f"%(time.time()-ts)
 
@@ -145,7 +143,7 @@ def Multiplicity(img,segmap):
 ##    ax[1].imshow(compact)
 ##    show()
 ##    print psi_a,psi_c
-    
+
     Psi = 100*np.log10(psi_c/psi_a)
     return Psi,psi_a
 
@@ -195,7 +193,7 @@ def find_alpha_beta(img1,img2,a0=1.0,b0=0):
 
 def color_dispersion(img1,img2,segmap1,segmap2,bg1,bg2,cen1,cen2):
     "Compute the color dispersion parameter given constant backgrounds bg1 and bg2"
-    
+
     GAL1=img1*segmap1
     GAL2=img2*segmap2
 
@@ -204,11 +202,11 @@ def color_dispersion(img1,img2,segmap1,segmap2,bg1,bg2,cen1,cen2):
 
     x1,y1=cen1
     x2,y2=cen2
-    
+
     r1=np.size_segmentation_map(x1,y1,segmap1)
     r2=np.size_segmentation_map(x2,y2,segmap2)
     rmax=max(r1,r2)
-    
+
     GAL1=GAL1[int(x1-rmax):int(x1+rmax)+1,int(y1-rmax):int(y1+rmax)+1]
     GAL2=GAL2[int(x2-rmax):int(x2+rmax)+1,int(y2-rmax):int(y2+rmax)+1]
 
@@ -219,17 +217,16 @@ def color_dispersion(img1,img2,segmap1,segmap2,bg1,bg2,cen1,cen2):
 ##    ax[1].imshow(GAL2)
 ##    ax[2].imshow(GAL2-alpha*GAL1)
 ##    show()
-    
-    #test_minimize_ab(GAL1,GAL2)    
+
+    #test_minimize_ab(GAL1,GAL2)
     Sum1 = np.sum((GAL2-alpha*GAL1-beta)**2)
     Sum2 = np.sum((GAL2-beta)**2)
-    
+
     Npix = max([len(segmap1[segmap1>0]),len(segmap2[segmap2>0])])
 
     #Sum3 += np.sum(bg2-alpha*bg1)**2 ### Use if not constant background
-    Sum3 = Npix*(bg2-alpha*bg1)**2 
-    
+    Sum3 = Npix*(bg2-alpha*bg1)**2
+
     Xi = (Sum1-Sum3)/(Sum2-Sum3)
 
     return Xi
-
