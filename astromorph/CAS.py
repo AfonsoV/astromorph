@@ -436,7 +436,7 @@ def Anel(img,r,dmat,upp=1.1,low=0.9,draw_stuff=False):
     --------
 
     """
-    """Compute the flux with an annular region width width [0.8*r , 1.2*r] """
+    """Compute the flux with an annular region width width [low*r , upp*r] """
 
     stest=np.zeros(img.shape)
     stest[dmat<upp*r]=1
@@ -655,7 +655,7 @@ def CAS_S(img,xc,yc,sigma,skypatch=None):
 
 #    smoothed = snd.filters.gaussian_filter(gal, sigma, mode='constant')
     smoothed = boxcar_filter2d(gal, sigma)
-    dmat,dists=distance_matrix(xc,yc,gal)
+    dmat,dists=utils.distance_matrix(xc,yc,gal)
     dmat[dmat < sigma]=0
     dmat[dmat >= sigma]=1
 
