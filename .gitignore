@@ -7,3 +7,6 @@ testingScript.py
 build/
 dist/
 astromorph.egg-info/
+
+# galfit testing
+*.fits
