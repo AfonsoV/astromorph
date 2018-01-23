@@ -27,6 +27,21 @@ from .CAS import Anel
 ############################################# General Sersic
 #############################################
 def plot_results(An,Num,var,absolute=True):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     fig,(ax0,ax1) = mpl.subplots(nrows=2,sharex=True)
     fig.subplots_adjust(hspace=0.0)
     ax0.scatter(An[Num>0],Num[Num>0],c='DodgerBlue',s=40,alpha=0.5)
@@ -49,6 +64,21 @@ def plot_results(An,Num,var,absolute=True):
 
 
 def I2(r,I0,r0,m=2):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
    Is = I0*(1-(r/float(r0))**m)
    try:
        Is[Is<0]=0
@@ -58,14 +88,44 @@ def I2(r,I0,r0,m=2):
    return Is
 
 def test_I2():
-   I0=1
-   r0=1
-   rs=np.linspace(0,1.1*r0)
-   for m in [1,2,3,4,5]:
-       mpl.plot(rs,I2(rs,I0,r0,m),'-')
-   return
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    I0=1
+    r0=1
+    rs=np.linspace(0,1.1*r0)
+    for m in [1,2,3,4,5]:
+        mpl.plot(rs,I2(rs,I0,r0,m),'-')
+    return
 
 def Fr_I2(r,I0,r0,m=2):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
    Ftot = I0*pi*r0**2*(m/(m+2.))
    Fr = B * r**2 *(0.5 - (r/float(r0))**m / (m+2.))
    try:
@@ -76,6 +136,21 @@ def Fr_I2(r,I0,r0,m=2):
    return Fr
 
 def test_FrI2():
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
    I0=1
    r0=1
    rs=np.linspace(0,1.1*r0)
@@ -86,6 +161,21 @@ def test_FrI2():
    return
 
 def invI2(F,I0,r0):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
    B = 2*pi*r0**2
    m=2.
    Ftot = pi*r0**2*(m/(m+2.))
@@ -98,6 +188,21 @@ def invI2(F,I0,r0):
    return iI2
 
 def test_invI2():
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
    I0=1.
    r0=4.
    m=2.
@@ -107,6 +212,21 @@ def test_invI2():
    return
 
 def Lp_I2(p,I0,r0):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
    m=2.
    Ftot = np.pi*r0**2*(m/(m+2.))
    rF = invI2(p,I0,r0)
@@ -114,6 +234,21 @@ def Lp_I2(p,I0,r0):
    return lp/(np.mean(I2(np.linspace(0,r0,1000),I0,r0)))
 
 def test_Lp():
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
    I0=10.
    r0=10.
    ps = np.linspace(0,1,1000)
@@ -122,10 +257,40 @@ def test_Lp():
 
 
 def kappa(n):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     from scipy.special import gammaincinv
     return gammaincinv(2*n,1./2)
 
 def test_kappa():
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     "Compare the obtained values with the Ciotti & Bertin Approximation"
 
     n=np.linspace(0.1,10)
@@ -162,29 +327,134 @@ def test_kappa():
     return
 
 def gammainc(alfa,x):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     from scipy.special import gammainc,gamma
     return gammainc(alfa,x)*gamma(alfa)
 
 def sersic(r,Ie,Re,n):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     "Exponential disk profile"
     b = kappa(n)
     return Ie*np.exp(-b*(abs(r)/Re)**(1./n)+b)
 
 def mu_sersic(r,mu_e,Re,n):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     return mu_e + 2.5*kappa(n) * ( (r/Re)**(1./n) - 1 ) / np.log(10)
 
 def sersic_int(r,Ie,Re,n):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     b = kappa(n)
     return 2*np.pi*Ie*Re*Re*(n/b**(2.*n))*gammainc(2*n,b*(r/Re)**(1./n))*np.exp(b)
 
 def sersic_mean(r,Ie,Re,n,q=1.0):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     return sersic_int(r,Ie,Re,n)/(np.pi*q*r*r)
 
 def total_flux(Ie,re,n):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     b = kappa(n)
     return Ie*re*re*gamma(2*n)*2*np.pi*n/(b**(2.*n))*np.exp(b)
 
 def test_sersic():
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     ns=[1,2,4,6,8,10]
     Ie=100
     RE=1
@@ -224,6 +494,21 @@ def test_sersic():
 
 ##
 def galaxy_creation(imsize,xc,yc,I,r,n,q,theta,psf=None,**kwargs):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     R = utils.compute_ellipse_distmat(np.zeros(imsize),xc,yc,q,theta)
     profile = sersic(R,I,r,n)
 
@@ -235,6 +520,21 @@ def galaxy_creation(imsize,xc,yc,I,r,n,q,theta,psf=None,**kwargs):
     return galaxy
 
 def profile(img,xc,yc,re,out_fact=5):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
 
     R = utils.compute_ellipse_distmat(xc,yc,img)
     rs = np.arange(0,int(out_fact*re))
@@ -261,6 +561,21 @@ def profile(img,xc,yc,re,out_fact=5):
     return rmeans,Ir,Ian
 
 def testing_profile():
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     Ie=1.0
     re=10.0
     q=1.0
@@ -300,10 +615,40 @@ def testing_profile():
 #############################################
 
 def circ_shape(r):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     I = ellipse_shape(r,1,0)
     return I
 
 def ellipse_shape(r,q,theta):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     if (q>1.01) or (q<=0):
         raise ValueError("Invalid value for axis ratio. It must be between 0<q<=1.")
     if (r<=0):
@@ -317,6 +662,21 @@ def ellipse_shape(r,q,theta):
 
 
 def area_test_ellipse(ntestq=100):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     rs=np.linspace(5,25,5)
     qs=np.linspace(0.15,1.0,ntestq)
     for r in rs:
@@ -342,6 +702,21 @@ def area_test_ellipse(ntestq=100):
     return
 
 def area_test_ellipse2(ntestq=100):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     rs=np.linspace(5,25,5)
     thetas=np.linspace(-90,90.,ntestq)
     q=0.5
@@ -367,6 +742,21 @@ def area_test_ellipse2(ntestq=100):
     return
 
 def area_test_circle(rmax=100):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     rs = np.arange(1,rmax)
     Area= np.zeros(len(rs))
     Area_pix= np.zeros(len(rs))
@@ -388,6 +778,21 @@ def area_test_circle(rmax=100):
 
 
 def rectangular_shape(a,b):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     a=int(a)
     b=int(b)
     side=max([a,b])
@@ -396,9 +801,39 @@ def rectangular_shape(a,b):
     return I
 
 def square_shape(l):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     return rectangular_shape(l,l)
 
 def angles_from_points(p0,points):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     npoints=len(points)
     angles = np.zeros(npoints)
     for j in range(npoints):
@@ -417,10 +852,40 @@ def angles_from_points(p0,points):
     return angles
 
 def pointsInPolygon(points,vertices):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     polygon = mpa.Polygon(vertices)
     return polygon.get_path().contains_points(points)
 
 def polygon_shape(r,nverts,verts=None,clr='red'):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
 
     I = np.zeros([2*r+2,2*r+2])
 
@@ -474,6 +939,21 @@ def polygon_shape(r,nverts,verts=None,clr='red'):
 ##
 
 def gerate_combination(imsize,nshapes,rmax=10,types=['C','E','R','S','P'],intersect=True,nverts_lims=[5,10],Imax=1,profile=False,border=4,rmin=4):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
 
     if rmax>min(imsize)/2:
         raise ValueError("Maximum shape size greater than figure size!")
@@ -592,6 +1072,21 @@ def gerate_combination(imsize,nshapes,rmax=10,types=['C','E','R','S','P'],inters
 ##sys.exit()
 
 def test_max_intensity():
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     ns=np.linspace(0.01,10.,100)
     gs1=[]
     gs2=[]
@@ -616,10 +1111,40 @@ def test_max_intensity():
 ######################################################################
 
 def create_gaussian_PSF(fwhm,**kwargs):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     sigma = fwhm/(2*np.sqrt(2*np.log(2)))
     return Gaussian2DKernel(sigma,**kwargs)
 
 def create_moffat_PSF(gamma,alpha,**kwargs):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     return Moffat2DKernel(gamma,alpha,**kwargs)
 
 ######################################################################
@@ -627,7 +1152,37 @@ def create_moffat_PSF(gamma,alpha,**kwargs):
 ######################################################################
 
 def create_gaussian_sky(shape,stddev,mean=0):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     return rdm.normal(mean*np.ones(shape),stddev)
 
 def poissonFilter(model,gain,exposure_time=1):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     return rdm.poisson(model*exposure_time*gain)/gain

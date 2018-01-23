@@ -4,12 +4,24 @@ import matplotlib.pyplot as mpl
 from .CAS import petrosian_rad,Anel
 
 def sbprofiler(img,segmap):
-    """ Code to generate a 'surface brightness profile' based on the position
+    r"""Code to generate a 'surface brightness profile' based on the position
     of individual spatial bins (by default a spatial bin = 1 pixel). Surface brightness
     values and distance values are normalized to a specific radius (half-ligh, petrosian,...)
     and the SB is normalized by the total surface brightness inside that radius.
-    """
 
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     xc,yc = utils.barycenter(img,segmap)
     # xc,yc = np.where(img==np.amax(img))
 
@@ -25,6 +37,21 @@ def sbprofiler(img,segmap):
     return RS,IS
 
 def surface_brightness_profile(image,segmap,q=1.0,angle=0.0,rmax=None,rstep=3):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     xc,yc = utils.barycenter(image,segmap)
 
     dmat = utils.compute_ellipse_distmat(image,xc,yc,q,angle)
@@ -36,6 +63,21 @@ def surface_brightness_profile(image,segmap,q=1.0,angle=0.0,rmax=None,rstep=3):
     return radius,fluxes
 
 def vertices(smap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     assert np.size(smap[smap>0])>0,"There are no non-zero elements on the segmentation map"
     fig,ax=mpl.subplots()
     outline = ax.contour(smap,levels=[0.5])
@@ -45,6 +87,21 @@ def vertices(smap):
     return [p.vertices for p in outlinePath]
 
 def maxSegMapDistance(smap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     border = vertices(smap)
     if len(border)==0:
         return 0
@@ -61,6 +118,21 @@ def maxSegMapDistance(smap):
     return dmax
 
 def filamentarity(smap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ Defined to compute the area (in pixel) of the galaxy as defined from its
     segmentation map and compare it to the minimum area of the circle that encloses
     the galaxy. (see Matsuda et al. 2011)

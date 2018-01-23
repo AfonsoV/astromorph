@@ -17,6 +17,21 @@ ID,RA,DEC,Z,ZFlag = np.loadtxt('%s'%(imgcat),unpack=True,usecols=[0,1,2,3,4],dty
 
 
 def gen_entropy_index(img,alpha):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
 
     data = abs(img.copy())
     data=data[data>0]

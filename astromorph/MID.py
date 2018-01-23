@@ -1,27 +1,22 @@
 from . import utils
 import numpy as np
 
-""" CODE TO COMPUTE MID STATISTICS (Newman et al 2013)
-
-18/07/2013  - Beginning (MID performed on test galaxies)
-19/07/2013  - Testing SDSS galaxies with dust lanes
-            - Add sky value for segmentation map generation
-            - Deal with multiple regions (usally single pixels) with the same total area in sort_areas
-            - Deal with multiple sources issue (segmentation map for central source only)
-            - Select Groups only within the segmentation map region in grouping
-            - Compute I only within segmentation map
-26/08/2013  - Alterations on find_centroid and deviation functions to shift the pixels by one value to avoid the start at zero index
-27/08/2013  - Alterations on multimode to accept segmap as input instead of computing one
-28/08/2013  - Variable dF in quantile to account for different units in variation
-            - Start with smaller quantile value in multimode
-29/08/2013  - Add description to functions
-            - find_ij moved to mod_imports
-14/10/2013  - Correction on local_maxims due to IndexErrors
-13/11/2013  - Added Exception for intensity calculation when only one extracted region is found
-16/07/2014  - Reformulation of the find_centroid function in terms of the barycenter function of the mod_importd module
-"""
-
 def quantile(img,segmap,q):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Computes the flux associated with the quantile value so that
     q% of the pixels are below that value"""
     gal_fluxes=img[segmap>0]
@@ -37,6 +32,21 @@ def quantile(img,segmap,q):
     return F
 
 def grouping(img,segmap,q):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Generates a group map where all the pixels above the Flux F associated
     with the qauntile q are asnp.signed a value of one. All other pixels are left
     with zero value"""
@@ -53,6 +63,21 @@ def grouping(img,segmap,q):
     return GROUPS
 
 def find_groups(grp):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Finds the diferent non-contiguous groups and computes the area associated
     with each one."""
     Regions,Nregions=sci_nd.label(grp) #selects the non-contiguous regions asnp.signing different sequential values to each pixel belonging to a given group
@@ -65,6 +90,21 @@ def find_groups(grp):
     return Areas
 
 def sort_areas(Areas):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Sort the values in Areas in a decreasing way"""
     A=np.zeros(np.size(Areas))
     MAX = max(Areas)
@@ -80,6 +120,21 @@ def sort_areas(Areas):
     return A
 
 def multimode(img,segmap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ Computes the multimode statistic from MID"""
     Qs=np.linspace(0.0,1.0,100,endpoint=True)
     Rs=np.zeros(len(Qs))
@@ -94,6 +149,21 @@ def multimode(img,segmap):
     return Rs,Qs
 
 def find_neighbour_max(img,segmap,i,j):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ To find if any of the 8 adjacent pixels has higher fluxes that
     F(i,j). If yes, return maximum value coordinates of neighbour pixel.
     If not, (i,j) is returned"""
@@ -133,6 +203,21 @@ def find_neighbour_max(img,segmap,i,j):
     return maxi,maxj
 
 def find_local_max(img,segmap,i,j):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """To find the local maximum associated with the pixel (i,j) by the maximum
     gradient path method."""
     ni,nj=find_neighbour_max(img,segmap,i,j)
@@ -142,6 +227,21 @@ def find_local_max(img,segmap,i,j):
     return ni,nj
 
 def local_maxims(img,segmap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ Find all the local maxima associated with every pixel within the
     segmentation map and constructs the Group Intensity Map (a map describing)
     all the groups of pixels associated with every local maxima."""
@@ -165,6 +265,21 @@ def local_maxims(img,segmap):
     return Imap,np.array(LM)
 
 def intensity(Img,Imap,Segmap,LM):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Computes the intensity statistic from MID"""
     Nregions = int(np.amax(Imap))
     Fmap = Imap * Img * Segmap
@@ -180,11 +295,41 @@ def intensity(Img,Imap,Segmap,LM):
     return I,LM[Is==max(Is)][0]
 
 def find_centroid(img,segmap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ Computes the centroid of the light distribution as np.averaged by
     the pixel flux."""
-    return barycenter(img,segmap)
+    return utils.barycenter(img,segmap)
 
 def deviation(img,segmap,imax_center):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """ Computes the deviation statistic from MID """
     xcen,ycen=find_centroid(img,segmap)
     #print xcen,ycen

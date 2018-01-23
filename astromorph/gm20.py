@@ -1,28 +1,26 @@
 from . import utils
 
-
-""" CODE TO COMPUTE Gini Coefficient and Moment of Light Stats (Lotz et al. 2004)
-26/08/2013  - Beggining of functions gini, Mtot, find_center, M20
-            - Need to check why minimize dos not converge quickly in find_center (check methods available on help, quicker is Nelder-Mead, bounds do not improve performance)
-            - Gini Coeff. values probably unerstimated (Maybe due to small segmentation map)
-27/08/2013  - Added test_minimize_m to visualize the function to minimize to get the galaxy center
-29/08/2013  - Added test_gini to compute G in ideal cases
-            - Select flux pixels based on segmap>0 values and not gal>0 values on Gini and M20
-            - Correction bug on Mtot and M20, compute distances using i,j not i+1,j+1
-            - Small correction on M20 while loop, SumF now at the end and corrected to the right value in case of multiple occurrences of same flux value
-27/09/2013  - Added exception on M_20 for when the brightest pixel has mores that 20% of the total galaxy flux
-01/10/2013  - Gini coefficient based on abolut values of the flux (see Lotz et al. 2004)
-14/10/2013  - Correction on M_tot cycle to avoid IndexErrors due to changes in find_ij now range(imin,imax) and not range(imin,imax+1)
-16/12/2013  - Small change in MomemntLight20 and find_center_mtot to prevent double calculation of mtot
-17/12/2013  - Optimization in Mtot
-"""
-
 ####################################################################################################
 #                                              GINI                                                    #
 ###################################################################################################
 
 
 def Gini(img,segmap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     "Compute the gini coefficient for a given image with a segmentation map provided"
     gal=img*segmap
     fluxs=gal[segmap>0]
@@ -39,6 +37,21 @@ def Gini(img,segmap):
     return G
 
 def test_gini():
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Code to test values of G in ideal cases: all light in one pixel G=1
     and light uniformly distributed G=0"""
     N=50
@@ -59,6 +72,21 @@ def test_gini():
 ###################################################################################################
 
 def Mtot(cen,img,segmap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Compute the second order total momentum of a galaxy given xc and yc"""
     N,M=img.shape
     gal = img*segmap
@@ -73,6 +101,21 @@ def Mtot(cen,img,segmap):
     return np.sum(Mtot_image)
 
 def find_center_mtot(img,segmap,x0,y0,verbose=False):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Find the galaxy center by minimizing Mtot"""
     res=sci_op.minimize(Mtot,[x0,y0],args=(img,segmap),method='Nelder-Mead')
     if res.success == True:
@@ -88,6 +131,21 @@ def find_center_mtot(img,segmap,x0,y0,verbose=False):
     return xc,yc,mtot,mtot_flag
 
 def MomentLight20(img,segmap,x0=100,y0=100,verbose=False):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Compute the M20 index based on Initial guess for galactic center (x0,y0)
     Mtot is minimized prior to calc of M20 by finding the best pair (xc,yc)"""
     xc,yc,mtot,mtot_flag=find_center_mtot(img,segmap,x0,y0,verbose=verbose)
@@ -121,6 +179,21 @@ def MomentLight20(img,segmap,x0=100,y0=100,verbose=False):
         return m20,mtot_flag
 
 def test_minimize_m(img,segmap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Function to plot the 2D distribution of Mtot for different pairs of (x,y)
     to investigate if minimize is picking the right solution"""
     N=np.size(img,0)

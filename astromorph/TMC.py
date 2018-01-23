@@ -2,21 +2,23 @@ from . import utils
 import numpy as np
 from . import cosmology as cosmos
 
-""" COMPUTE I,Psi,Xi parameters Law et al. 2007
-27/08/2013  - Beggining
-            - Reduced light_potential calculations by half (better optimization needed)
-28/08/2013  - rearrange_light -> rearrange_light_spiral
-            - new algorithm based on distances matrix to rearrange pixels
-            - distance calc in a new function on mod_imports
-            - distance_matrix moved to mod_imports
-27/09/2013  - Dealed with diference in np.sizes from differente segmentation maps to color dispersion calc
-02/10/2013  - No segmentation map applied to calc of color dispersion
-14/10/2013  - Corretion to light_potential due to IndexErrors induced by changes in find_ij
-            - Light Potential now only computes pixels from segmap, skipping all zero values
-17/10/2013  - Correction on light potential to deal with sources clos to the border by settin X[gal==0]=-1
-"""
 
 def Size(segmap,pixscale,z,pars=None):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     "Compute I parameter using pixscale in arcsec. Areas are inb kpc2"
     da=cosmos.angular_distance(z,pars=pars)*1000
     N = np.size(segmap[segmap>0])
@@ -24,6 +26,21 @@ def Size(segmap,pixscale,z,pars=None):
     return I
 
 def sum_all(gal,X,Y,init,npoints):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     Sum=0.0
     for i in range(init,npoints):
         for j in range(i+1,npoints):
@@ -32,6 +49,21 @@ def sum_all(gal,X,Y,init,npoints):
     return Sum
 
 def light_potential(img,segmap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     "Compute the light potential of a galaxy within the segmentation map"
     gal=img*segmap
     N,M=gal.shape
@@ -77,6 +109,21 @@ def light_potential(img,segmap):
 
 
 def rearrange_light_spiral(img,segmap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     "Rearrange pixels by decreasing intensity in an outward spiral pattern"
     N=np.size(img,0)
     M=np.size(img,1)
@@ -109,6 +156,21 @@ def rearrange_light_spiral(img,segmap):
     return X,Y,Nimg
 
 def rearrange_light_distance(img,segmap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     "Rearrange pixels by decreasing intensity using a distance matrix"
     N,M=img.shape
     gal=img*segmap
@@ -130,6 +192,21 @@ def rearrange_light_distance(img,segmap):
     return Nimg
 
 def Multiplicity(img,segmap):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     "Compute the multiplicity statistic of Law et al. (2007)"
     psi_a=light_potential(img,segmap)
 
@@ -149,6 +226,21 @@ def Multiplicity(img,segmap):
 
 
 def min_stat_pars(pars,img1,img2,sig1=1,sig2=1):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     """Function to minimize and find the alpha and beta parameters to compute xi.
     Images have to be of the same np.size, determined by image 1.See Papovich et al. 2003"""
     alpha,beta=pars
@@ -167,6 +259,21 @@ def min_stat_pars(pars,img1,img2,sig1=1,sig2=1):
     return Sum
 
 def test_minimize_ab(img1,img2):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     "3D plot of the function min_stat_pars to be minimized"
     alphas=np.linspace(-10,10,50)
     betas = np.linspace(-10,10,50)
@@ -183,6 +290,21 @@ def test_minimize_ab(img1,img2):
     return None
 
 def find_alpha_beta(img1,img2,a0=1.0,b0=0):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     "Find alpha and beta parameter by minimizing min_stats_pars"
     res=sci_op.minimize(min_stat_pars,[a0,b0],args=(img1,img2),method='Nelder-Mead')
     if res.success == True:
@@ -192,6 +314,21 @@ def find_alpha_beta(img1,img2,a0=1.0,b0=0):
     return a,b
 
 def color_dispersion(img1,img2,segmap1,segmap2,bg1,bg2,cen1,cen2):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     "Compute the color dispersion parameter given constant backgrounds bg1 and bg2"
 
     GAL1=img1*segmap1
