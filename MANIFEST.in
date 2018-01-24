@@ -1,1 +1,2 @@
 include astromorph/astromorph.cfg
+include scripts/*
