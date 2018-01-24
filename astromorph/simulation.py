@@ -79,13 +79,13 @@ def I2(r,I0,r0,m=2):
     --------
 
     """
-   Is = I0*(1-(r/float(r0))**m)
-   try:
+    Is = I0*(1-(r/float(r0))**m)
+    try:
        Is[Is<0]=0
-   except TypeError:
+    except TypeError:
        if Is<0:
            Is=0
-   return Is
+    return Is
 
 def test_I2():
     r"""
@@ -126,14 +126,14 @@ def Fr_I2(r,I0,r0,m=2):
     --------
 
     """
-   Ftot = I0*pi*r0**2*(m/(m+2.))
-   Fr = B * r**2 *(0.5 - (r/float(r0))**m / (m+2.))
-   try:
+    Ftot = I0*pi*r0**2*(m/(m+2.))
+    Fr = B * r**2 *(0.5 - (r/float(r0))**m / (m+2.))
+    try:
        Fr[r>=r0]=Ftot
-   except TypeError:
+    except TypeError:
        if r>=r0:
            Fr=Ftot
-   return Fr
+    return Fr
 
 def test_FrI2():
     r"""
@@ -151,14 +151,14 @@ def test_FrI2():
     --------
 
     """
-   I0=1
-   r0=1
-   rs=np.linspace(0,1.1*r0)
-   for m in [1,2,3,4,5]:
+    I0=1
+    r0=1
+    rs=np.linspace(0,1.1*r0)
+    for m in [1,2,3,4,5]:
        Ftot = I0*pi*r0**2*(m/(m+2.))
        mpl.plot(rs,Fr_I2(rs,I0,r0,m),'-',color=cs[m])
        mpl.hlines(Ftot,0,1.1*r0,color=cs[m],linestyle='--')
-   return
+    return
 
 def invI2(F,I0,r0):
     r"""
@@ -176,16 +176,16 @@ def invI2(F,I0,r0):
     --------
 
     """
-   B = 2*pi*r0**2
-   m=2.
-   Ftot = pi*r0**2*(m/(m+2.))
-   iI2 = np.sqrt(r0**2*(1-sqrt(B*(B-4*F))/B))
-   try:
+    B = 2*pi*r0**2
+    m=2.
+    Ftot = pi*r0**2*(m/(m+2.))
+    iI2 = np.sqrt(r0**2*(1-sqrt(B*(B-4*F))/B))
+    try:
        iI2[F>=Ftot]=r0
-   except TypeError:
+    except TypeError:
        if F>=Ftot:
            iI2=r0
-   return iI2
+    return iI2
 
 def test_invI2():
     r"""
@@ -203,13 +203,13 @@ def test_invI2():
     --------
 
     """
-   I0=1.
-   r0=4.
-   m=2.
-   Ftot = np.pi*r0**2*(m/(m+2.))
-   fs = np.linspace(0,1.2*Ftot,1000)
-   mpl.plot(fs,invI2(fs,I0,r0))
-   return
+    I0=1.
+    r0=4.
+    m=2.
+    Ftot = np.pi*r0**2*(m/(m+2.))
+    fs = np.linspace(0,1.2*Ftot,1000)
+    mpl.plot(fs,invI2(fs,I0,r0))
+    return
 
 def Lp_I2(p,I0,r0):
     r"""
@@ -227,11 +227,11 @@ def Lp_I2(p,I0,r0):
     --------
 
     """
-   m=2.
-   Ftot = np.pi*r0**2*(m/(m+2.))
-   rF = invI2(p,I0,r0)
-   lp = 2*np.pi*I0*rF**3/(15*r0**2) *(3*rF**2+5*r0**2)
-   return lp/(np.mean(I2(np.linspace(0,r0,1000),I0,r0)))
+    m=2.
+    Ftot = np.pi*r0**2*(m/(m+2.))
+    rF = invI2(p,I0,r0)
+    lp = 2*np.pi*I0*rF**3/(15*r0**2) *(3*rF**2+5*r0**2)
+    return lp/(np.mean(I2(np.linspace(0,r0,1000),I0,r0)))
 
 def test_Lp():
     r"""
@@ -249,11 +249,11 @@ def test_Lp():
     --------
 
     """
-   I0=10.
-   r0=10.
-   ps = np.linspace(0,1,1000)
-   mpl.plot(ps,Lp_I2(ps,I0,r0))
-   return
+    I0=10.
+    r0=10.
+    ps = np.linspace(0,1,1000)
+    mpl.plot(ps,Lp_I2(ps,I0,r0))
+    return
 
 
 def kappa(n):
