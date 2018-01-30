@@ -50,7 +50,7 @@ class LensingModel(object):
         return None
 
     def get_lensing_parameters_at_position(self,coords,window=5):
-        xl,xu,yl,yu = get_bounding_box("%s_gamma.fits"%(self.modelname),coords,\
+        xl,xu,yl,yu = utils.get_bounding_box("%s_gamma.fits"%(self.modelname),coords,\
                                         window,1.0)
         medKappa = np.median(self.kappa[yl:yu,xl:xu])
         medGamma = np.median(self.gamma[yl:yu,xl:xu])

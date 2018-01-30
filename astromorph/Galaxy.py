@@ -2,9 +2,12 @@ import matplotlib.pyplot as mpl
 import numpy as np
 import astropy.io.fits as pyfits
 import scipy.ndimage as snd
+from astropy.convolution import convolve
 
 from . import utils
 from . import plot_utils as putils
+from . import simulation
+import time
 
 class Galaxy(object):
 
@@ -16,7 +19,7 @@ class Galaxy(object):
 
     def draw_cutout(self,size,pixelscale,eixo=None,**kwargs):
         if self.cutout is None:
-            data = get_cutout(self.original_name,self.coords,size,pixelscale)
+            data = util.get_cutout(self.original_name,self.coords,size,pixelscale)
         else:
             data = self.cutout
         if data is not None:
@@ -32,8 +35,8 @@ class Galaxy(object):
             print("Galaxy cutout outside image region")
 
     def set_bounding_box(self,size,pixelscale):
-        self.bounding_box = get_bounding_box(self.original_name,self.coords,size,pixelscale)
-        self.cutout = get_cutout(self.original_name,self.coords,size,pixelscale)
+        self.bounding_box = utils.get_bounding_box(self.original_name,self.coords,size,pixelscale)
+        self.cutout = utils.get_cutout(self.original_name,self.coords,size,pixelscale)
         return None
 
     def set_psf(self,filename,resize=None):
@@ -46,16 +49,22 @@ class Galaxy(object):
             self.psf = self.psf[50:151,50:151]
         return None
 
-    def fit(self,initPars,lensingPars,mag_zeropoint,exposure_time,oversampling=3):
+    def fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,oversampling=3):
         xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = initPars
-        lensKappa,lensGamma,lensMu = lensingPars
+
+        if lensingPars is None:
+            lensMu = 1
+            majAxis_Factor = 1
+            shear_factor = 1
+        else:
+            lensKappa,lensGamma,lensMu = lensingPars
+            majAxis_Factor = 1/np.abs(1-lensKappa-lensGamma)
+            shear_factor = (1-lensKappa-lensGamma)/(1-lensKappa+lensGamma)
 
         if self.cutout is None:
             raise ValueError("No cutout for this galaxy is defined")
         else:
             N,M=self.cutout.shape
-            majAxis_Factor = 1/np.abs(1-lensKappa-lensGamma)
-            shear_factor = (1-lensKappa-lensGamma)/(1-lensKappa+lensGamma)
 
             t1 = time.time()
             model = simulation.generate_sersic_model((N,M),\
