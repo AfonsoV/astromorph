@@ -1685,6 +1685,98 @@ def rebin2d(img,size_out,flux_scale=False):
     else:
         return img_bin.transpose()/(xbox*ybox)
 
+
+def get_bounding_box(imgname,coords,size,pixelscale):
+    r""" Returns a square bounding box coordinates (in pixels) centered in
+    coords (astropy SkyCoord with ra,dec) and 'size' width in arcseconds.
+    It requires the pixel scale (in arcseconds per pixel).
+
+    Parameters
+    ----------
+
+    imgname : str
+        The name of the fits image to get the bounding box for.
+
+    coords : astropy.coordinates.SkyCoord
+        A set of coordinates (with ra,dec values) representing the center of
+        the bounding box.
+
+    size : float
+        The size of the bounding box in arcseconds.
+
+    pixelscale : float
+        The pixel scale (in arcseconds per pixel) of the given image.
+
+    Returns
+    -------
+
+    xl,xu,yl,yu : float, tuple
+        The corner coordinates of the bounding box.
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    centerCoords = get_center_coords(imgname,coords.ra.value,coords.dec.value)
+    hsize = int(size/pixelscale)//2
+
+    # if centerCoords[0] > data.shape[0] or\
+    #         centerCoords[1] > data.shape[1] or\
+    #         centerCoords[0] < 0 or\
+    #         centerCoords[1] < 0 :
+    #     return None
+
+    xl = int(centerCoords[0]-hsize)
+    xu = int(centerCoords[0]+hsize)
+    yl = int(centerCoords[1]-hsize)
+    yu = int(centerCoords[1]+hsize)
+    return (xl,xu,yl,yu)
+
+def get_cutout(imgname,coords,size,pixelscale):
+    r""" Returns a cutout from the given image, centered on coords and with the
+    requested size (in arcseconds). A pixel scale of the image is also required.
+
+    Parameters
+    ----------
+
+    imgname : str
+        The name of the fits image to get the bounding box for.
+
+    coords : astropy.coordinates.SkyCoord
+        A set of coordinates (with ra,dec values) representing the center of
+        the bounding box.
+
+    size : float
+        The size of the bounding box in arcseconds.
+
+    pixelscale : float
+        The pixel scale (in arcseconds per pixel) of the given image.
+
+    Returns
+    -------
+
+    img : float, 2D array
+        A cutout of the given image centered on coords, and with the given size.
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    boxCoords = get_bounding_box(imgname,coords,size,pixelscale)
+    if boxCoords is None:
+        return None
+    else:
+        xl,xu,yl,yu = boxCoords
+    data = pyfits.getdata(imgname)
+    return data[yl:yu,xl:xu]
+
+
 if __name__=='__main__':
 #    img = pyfits.getdata('CFHTLS_1.fits')
 #    hdr=pyfits.getheader('CFHTLS_1.fits')
