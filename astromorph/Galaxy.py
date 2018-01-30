@@ -1,5 +1,7 @@
 import matplotlib.pyplot as mpl
 import numpy as np
+import astropy.io.fits as pyfits
+
 from . import utils
 from . import plot_utils as putils
 
