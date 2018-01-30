@@ -20,7 +20,7 @@ fail to do so, you will be removed from participation in this project.
 
 If you experience or witness behavior you deem not proper, please send a message
 to the owner of this repository explaining your situation, including information
-that allows for the identification (in github) of all involved.
+that allows for the identification (within github) of all involved.
 
 If you feel that the current code of conduct is inappropriate, feel free to send
 suggestions for improvement.

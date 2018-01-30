@@ -1616,7 +1616,7 @@ def rebin2d(img,size_out,flux_scale=False):
         A tuple containing the 2D dimensions of the desired output array.
 
     flux_scale : bool, optional
-        If true, the flux of the outpu image is scaled by the area of its array.
+        If true, the flux of the output image is scaled by the area of its array.
         Else, all flux is preserved.
 
     Returns
@@ -1633,7 +1633,7 @@ def rebin2d(img,size_out,flux_scale=False):
     --------
 
     """
-    assert len(size_ou)==2, "size_out must have two elements"
+    assert len(size_out)==2, "size_out must have two elements"
     N,M = img.shape
 
     Nout,Mout = size_out
