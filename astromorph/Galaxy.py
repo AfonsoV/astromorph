@@ -11,15 +11,23 @@ import time
 
 class Galaxy(object):
 
-    def __init__(self,imgname,coords):
+    def __init__(self,imgname=None,imgdata=None,coords=None):
+
+        assert (imgname is not None) or (imgdata is not None),\
+                "One of imgname/imgdata must be provided."
+
         self.original_name = imgname
         self.coords = coords
-        self.cutout = None
+        if imgdata is not None:
+            self.cutout = imgdata
+        else:
+            self.cutout = None
+
         self.psf = None
 
     def draw_cutout(self,size,pixelscale,eixo=None,**kwargs):
         if self.cutout is None:
-            data = util.get_cutout(self.original_name,self.coords,size,pixelscale)
+            data = utils.get_cutout(self.original_name,self.coords,size,pixelscale)
         else:
             data = self.cutout
         if data is not None:
@@ -33,6 +41,16 @@ class Galaxy(object):
             putils.draw_cross(ax,0,0,gap=1.0,size=1.5,color="white",lw=3)
         else:
             print("Galaxy cutout outside image region")
+
+    def get_image_box_coordinates(self):
+        assert (self.bounding_box  is not None),"A bounding box must be assigned to the galaxy"
+        header = pyfits.getheader(self.original_name)
+        x0,x1,y0,y1=self.bounding_box
+        def fx(x):
+            return (x-header["CRPIX1"])*header["CD1_1"] + header["CRVAL1"]
+        def fy(y):
+            return (y-header["CRPIX2"])*header["CD2_2"] + header["CRVAL2"]
+        return (fx(x0),fx(x1),fy(y0),fy(y1))
 
     def set_bounding_box(self,size,pixelscale):
         self.bounding_box = utils.get_bounding_box(self.original_name,self.coords,size,pixelscale)

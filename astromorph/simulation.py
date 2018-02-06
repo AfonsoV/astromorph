@@ -168,7 +168,7 @@ def sersic(r,Ie,Re,n):
 
     """
     b = kappa(n)
-    return Ie*np.exp(-b*(abs(r)/Re)**(1./n)+b)
+    return Ie*np.exp(-b*(np.abs(r)/Re)**(1./n)+b)
 
 def mu_sersic(r,mu_e,Re,n):
     r"""
