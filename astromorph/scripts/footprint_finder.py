@@ -1,6 +1,7 @@
 import astropy.io.fits as pyfits
 import astropy.wcs as pywcs
 import numpy as np
+import scipy.ndimage as snd
 import matplotlib.patches as mpa
 import matplotlib.pyplot as mpl
 import argparse
@@ -49,13 +50,17 @@ if __name__ == "__main__":
     print("PROCESSING A TOTAL OF %i IMAGES"%(nimages))
 
     for i in range(nimages):
-        print("\tProcessing image %s"%(args.images[i]))
+        print("\t%i:Processing image %s"%(i+1,args.images[i]))
         imgdata = pyfits.getdata(args.images[i])
+        
+        # if imgdata.shape[0]>1000:
+        #     imgdata =snd.zoom(imgdata,1000/imgdata.shape[0])
         smap = np.zeros_like(imgdata)
         smap[np.isnan(imgdata)]=0
         smap[(imgdata!=0)]=1
 
-        # fig,ax=mpl.subplots(1,2)
+
+        # fig,ax=mpl.subplots(1,1)
 
         if not args.pixel:
             extent = get_image_extent(args.images[i])
@@ -70,9 +75,11 @@ if __name__ == "__main__":
         print("\tWriting to %s.fpt"%(fname))
         f_out = open("%s.fpt"%(fname),"w")
         for i,path in enumerate(outlines):
-            f_out.write("# Region %i"%(i+1))
+            f_out.write("# Region %i\n"%(i+1))
             coords = path.vertices
             f_out.write(" ".join(["%9.6f"%c for c in coords.ravel()]))
+            f_out.write("\n")
         f_out.close()
 
+        # mpl.show()
         mpl.close("all")
