@@ -3,6 +3,7 @@ import astropy.io.fits as pyfits
 
 from . import utils
 from . import plot_utils as putils
+from .cosmology import angular_distance
 
 class LensingModel(object):
 
@@ -13,7 +14,6 @@ class LensingModel(object):
         self.kappa = pyfits.getdata("%s_kappa.fits"%(model_root))
         # self.xdeflect = pyfits.getdata("%s_x-arcsec-deflect.fits"%(model_root))
         # self.ydeflect = pyfits.getdata("%s_y-arcsec-deflect.fits"%(model_root))
-        self.mu = self.get_magnification()
 
         self.lens_redshift = redshift_lens
         self.pixel_scale = pixel_scale
@@ -31,8 +31,16 @@ class LensingModel(object):
         return (fx(0),fx(self.gamma.shape[1]),fy(0),fy(self.gamma.shape[0]))
 
 
-    def get_magnification(self):
-        return 1/np.abs( (1-self.kappa)*(1-self.kappa) - self.gamma*self.gamma )
+    def get_magnification(self,redshift):
+
+        dlens = angular_distance(self.lens_redshift)
+        dsource = angular_distance(redshift)
+        dlens_source = dsource - (1+self.lens_redshift)/(1+redshift)*dlens
+
+        kappa_at_z = self.kappa * (dlens_source/dsource)
+        gamma_at_z = self.kappa * (dlens_source/dsource)
+        self.mu = 1/np.abs((1-kappa_at_z)*(1-kappa_at_z) - gamma_at_z*gamma_at_z)
+        return self.mu
 
     def draw_cutout(self,size,coords,component="gamma",eixo=None,**kwargs):
         if eixo is None:
