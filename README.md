@@ -21,4 +21,4 @@ A list of implemented non-parametric statistics:
 
 ### General utility tools
 
-A collection of python functions that are useful and common to many of this quantities, including for visualization, creation of segmentation masks, aperture photometry, among others.
+A collection of python functions that are useful and common to many of this quantities, including for visualisation, creation of segmentation masks, aperture photometry, among others.
