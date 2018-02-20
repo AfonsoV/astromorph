@@ -31,7 +31,7 @@ class LensingModel(object):
         return (fx(0),fx(self.gamma.shape[1]),fy(0),fy(self.gamma.shape[0]))
 
 
-    def get_magnification(self,redshift):
+    def get_magnification(self,redshift,minMag=5e-2):
 
         dlens = angular_distance(self.lens_redshift)
         dsource = angular_distance(redshift)
@@ -39,7 +39,10 @@ class LensingModel(object):
 
         kappa_at_z = self.kappa * (dlens_source/dsource)
         gamma_at_z = self.kappa * (dlens_source/dsource)
-        self.mu = 1/np.abs((1-kappa_at_z)*(1-kappa_at_z) - gamma_at_z*gamma_at_z)
+
+        divFactor = np.abs((1-kappa_at_z)*(1-kappa_at_z) - gamma_at_z*gamma_at_z)
+        divFactor[divFactor==0]=minMag
+        self.mu = 1/divFactor
         return self.mu
 
     def draw_cutout(self,size,coords,component="gamma",eixo=None,**kwargs):

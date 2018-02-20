@@ -545,13 +545,13 @@ def sky_value(img,k=3):
     back=img.copy()
     back=back[back!=0]
     thresh=media+k*dev
-    npix = len(img[(img)>=thresh])
+    npix = img[(img)>=thresh].size
     while npix>0:
         back = back[(back)<thresh]
         media=np.nanmean(back)
-        dev=np.std(back)
+        dev=np.nanstd(back)
         thresh=media+k*dev
-        npix = len(back[(back)>=thresh])
+        npix = back[(back)>=thresh].size
     return media,dev
 
 def select_object_map(xc,yc,segmap,pixscale,radius):
@@ -746,6 +746,8 @@ def gen_segmap_tresh(img,xc,yc,pixscale,radius =0.5,thresh=5.0,Amin=5,k_sky=3,al
     N,M=img.shape
     MAP = np.zeros([N,M])
     sky_mean,sky_std=sky_value(img,k=k_sky)
+    print(50*"=",sky_mean,sky_std)
+    print(img)
     MAP[img > sky_mean+thresh*sky_std] = 1
     Regions,Nregions=sci_nd.label(MAP)
     for n in range(1,Nregions+1):
@@ -766,7 +768,7 @@ def gen_segmap_tresh(img,xc,yc,pixscale,radius =0.5,thresh=5.0,Amin=5,k_sky=3,al
         return Regions
     else:
         segmap = select_object_map(xc,yc,Regions,pixscale,radius)
-        return sci_nd.binary_dilation(segmap,structure=structure)
+        return sci_nd.binary_dilation(segmap,structure=structure).astype(np.int16)
 
 def gen_segmap_sbthresh(img,xc,yc,sblimit,pixscale,radius=0.5,thresh=5.0,Amin=5,all_detection=False,structure=None):
     r"""Generate a segmentation map by selecting pixels above

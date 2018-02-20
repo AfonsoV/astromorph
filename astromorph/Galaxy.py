@@ -7,6 +7,7 @@ from astropy.convolution import convolve
 from . import utils
 from . import plot_utils as putils
 from . import simulation
+from . import galfit
 import time
 
 class Galaxy(object):
@@ -20,10 +21,13 @@ class Galaxy(object):
         self.coords = coords
         if imgdata is not None:
             self.cutout = imgdata
+            self.cutout[np.isnan(self.cutout)]=0
         else:
             self.cutout = None
 
         self.psf = None
+        self.psfname = "none"
+        self.mask = None
 
     def draw_cutout(self,size,pixelscale,eixo=None,**kwargs):
         if self.cutout is None:
@@ -57,18 +61,63 @@ class Galaxy(object):
         self.cutout = utils.get_cutout(self.original_name,self.coords,size,pixelscale)
         return None
 
+    def set_segmentation_mask(self,mask):
+        self.mask = mask
+        return None
+
+    def create_segmentation_mask(self,pixscale,radius,**kwargs):
+        N,M=self.cutout.shape
+        xc=N/2
+        yc=M/2
+        segmap = utils.gen_segmap_tresh(self.cutout,xc,yc,pixscale,radius=radius,**kwargs)
+        objmap = utils.select_object_map(xc,yc,segmap,pixscale,radius)
+        segmap[segmap>0]=1
+        self.set_segmentation_mask(segmap - objmap)
+        return self.mask
+
     def set_psf(self,filename,resize=None):
+        self.psfname = filename
         self.psf = pyfits.getdata(filename)
         if self.psf.shape[0]%2==0:
             self.psf = np.pad(self.psf,((0,1),(0,1)),mode="edge")
             self.psf = snd.shift(self.psf,+0.5)
 
         if resize is not None:
-            self.psf = self.psf[50:151,50:151]
+            self.psf = self.psf[75:126,75:126]
         return None
 
-    def fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,oversampling=3):
-        xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = initPars
+    def randomize_new_pars(self,pars):
+        xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = pars
+
+        new_xc = np.random.normal(xc,0.5)
+        new_yc = np.random.normal(yc,0.5)
+        new_mag = np.random.normal(mag,0.25)
+        new_radius = np.random.normal(radius,1.5)
+        new_sersic_index = np.random.normal(sersic_index,0.25)
+        new_axis_ratio = np.random.normal(axis_ratio,0.05)
+        new_position_angle = np.random.normal(position_angle,5)
+
+        if new_radius<0.1:
+            new_radius = 0.1
+        if new_axis_ratio<0.05:
+            new_axis_ratio = 0.05
+        if new_axis_ratio>1.00:
+            new_axis_ratio = 1.00
+        if new_position_angle<-180:
+            new_position_angle += 360
+        if new_position_angle>180:
+            new_position_angle -= 360
+        if new_sersic_index < 0.1:
+            new_sersic_index = 0.1
+        if new_sersic_index > 5:
+            new_sersic_index = 5
+
+        return new_xc,new_yc,new_mag,new_radius,new_sersic_index,new_axis_ratio,new_position_angle
+
+    def montecarlo_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars,nRun = 10):
+
+        N,M=self.cutout.shape
+        pars = initPars
 
         if lensingPars is None:
             lensMu = 1
@@ -79,29 +128,52 @@ class Galaxy(object):
             majAxis_Factor = 1/np.abs(1-lensKappa-lensGamma)
             shear_factor = (1-lensKappa-lensGamma)/(1-lensKappa+lensGamma)
 
+        nPars = 7
+        Nchain = np.zeros([nPars,nRun])
+        Nchain[:,0] = initPars
+        oldChi = 1e10
+        newChi = 1
+        i=1
+        while i < nRun:
+
+            xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = self.randomize_new_pars(Nchain[:,i-1])
+            # model = simulation.generate_sersic_model((N,M),\
+            #             (xc,yc,mag-2.5*np.log10(lensMu),\
+            #             radius*majAxis_Factor,1,\
+            #             axis_ratio*shear_factor,position_angle),\
+            #             mag_zeropoint,exposure_time)
+            #
+            # if self.psf is not None:
+            #     model = convolve(model,self.psf)
+
+            model = galfit.galaxy_maker(mag_zeropoint,N,M,"sersic",xc,yc,\
+            (mag,radius,sersic_index,axis_ratio),position_angle,sky=0,psfname=self.psfname)
+
+            diff_image = (model-self.cutout)*np.abs(1-self.mask)
+
+            newChi = np.sum((diff_image*diff_image).ravel())
+
+            print(i,newChi,newChi/oldChi)
+            if newChi/oldChi > np.random.uniform(1,1.05):
+                print("Rejected Fit")
+                continue
+            else:
+                Nchain[:,i] = xc,yc,mag,radius,sersic_index,axis_ratio,position_angle
+                oldChi = newChi
+                i+=1
+
+
+        return Nchain
+
+    def fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,oversampling=3,nRun=10):
+
+
         if self.cutout is None:
-            raise ValueError("No cutout for this galaxy is defined")
-        else:
-            N,M=self.cutout.shape
+            raise ValueError("No cutout for this galaxy is defined.")
 
-            t1 = time.time()
-            model = simulation.generate_sersic_model((N,M),\
-                    (xc,yc,mag-2.5*np.log10(lensMu),\
-                    radius*majAxis_Factor,sersic_index,\
-                    axis_ratio*shear_factor,position_angle),\
-                    mag_zeropoint,exposure_time)
-            t2 = time.time()
-            # # model = snd.rotate(model,position_angle,reshape=False)
-            # t3 = time.time()
-            # # model = utils.rebin2d(model,(N,M))
-            t4 = time.time()
-            if self.psf is not None:
-                model = convolve(model, self.psf)
-            t5 = time.time()
+        if self.mask is None:
+            raise ValueError("No mask defined for this galaxy.")
 
-            print("First Model : %.4f ms"%(1000*(t2-t1)))
-            # print("Rotated Model : %.4f ms"%(1000*(t3-t2)))
-            # print("Rebin Model : %.4f ms"%(1000*(t4-t3)))
-            print("Convolved Model : %.4f ms"%(1000*(t5-t4)))
-            print("Total Time : %.4f ms"%(1000*(t5-t1)))
-            return model
+        modelChain = self.montecarlo_fit(initPars,mag_zeropoint,exposure_time,lensingPars,nRun=nRun)
+
+        return modelChain

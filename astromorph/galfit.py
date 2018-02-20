@@ -164,7 +164,7 @@ def galaxy_maker(mag_zpt,xsize,ysize,model,xc,yc,pars,theta,sky=0,psfname="none"
     f1.close()
     sp.call('galfit -o1 GALFIT_input >> galfit.log',shell=True)
     galaxy=pyfits.getdata('model.fits')
-    sp.call('rm model.fits GALFIT_input galfit.log',shell=True)
+    # sp.call('rm model.fits GALFIT_input galfit.log',shell=True)
 
     return galaxy
 
