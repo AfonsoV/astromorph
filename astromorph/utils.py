@@ -746,8 +746,7 @@ def gen_segmap_tresh(img,xc,yc,pixscale,radius =0.5,thresh=5.0,Amin=5,k_sky=3,al
     N,M=img.shape
     MAP = np.zeros([N,M])
     sky_mean,sky_std=sky_value(img,k=k_sky)
-    print(50*"=",sky_mean,sky_std)
-    print(img)
+
     MAP[img > sky_mean+thresh*sky_std] = 1
     Regions,Nregions=sci_nd.label(MAP)
     for n in range(1,Nregions+1):
@@ -1724,12 +1723,7 @@ def get_bounding_box(imgname,coords,size,pixelscale):
     """
     centerCoords = get_center_coords(imgname,coords.ra.value,coords.dec.value)
     hsize = int(size/pixelscale)//2
-
-    # if centerCoords[0] > data.shape[0] or\
-    #         centerCoords[1] > data.shape[1] or\
-    #         centerCoords[0] < 0 or\
-    #         centerCoords[1] < 0 :
-    #     return None
+    header = pyfits.getheader(imgname)
 
     xl = int(centerCoords[0]-hsize)
     xu = int(centerCoords[0]+hsize)

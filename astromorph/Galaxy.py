@@ -9,6 +9,7 @@ from . import plot_utils as putils
 from . import simulation
 from . import galfit
 import time
+import emcee
 
 class Galaxy(object):
 
@@ -28,6 +29,7 @@ class Galaxy(object):
         self.psf = None
         self.psfname = "none"
         self.mask = None
+        self.sigmaImage = None
 
     def draw_cutout(self,size,pixelscale,eixo=None,**kwargs):
         if self.cutout is None:
@@ -75,15 +77,25 @@ class Galaxy(object):
         self.set_segmentation_mask(segmap - objmap)
         return self.mask
 
-    def set_psf(self,filename,resize=None):
-        self.psfname = filename
-        self.psf = pyfits.getdata(filename)
+    def set_psf(self,filename=None,psfdata=None,resize=None):
+        if filename is not None:
+            self.psfname = filename
+            self.psf = pyfits.getdata(filename)
+        elif psfdata is not None:
+            self.psf = psfdata
+        else:
+            raise ValueError("Either filename or psfdata must be given.")
+
         if self.psf.shape[0]%2==0:
             self.psf = np.pad(self.psf,((0,1),(0,1)),mode="edge")
             self.psf = snd.shift(self.psf,+0.5)
 
         if resize is not None:
             self.psf = self.psf[75:126,75:126]
+        return None
+
+    def set_sigma(self,sigma):
+        self.sigmaImage = sigma
         return None
 
     def randomize_new_pars(self,pars):
@@ -114,10 +126,72 @@ class Galaxy(object):
 
         return new_xc,new_yc,new_mag,new_radius,new_sersic_index,new_axis_ratio,new_position_angle
 
-    def montecarlo_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars,nRun = 10):
+
+    def emcee_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=20,nsamples=10000):
+        nexclude = nsamples//2
+
+        imsize = self.cutout.shape
+        if lensingPars is None:
+            lensMu = 1
+            majAxis_Factor = 1
+            shear_factor = 1
+        else:
+            lensKappa,lensGamma,lensMu = lensingPars
+            majAxis_Factor = 1/np.abs(1-lensKappa-lensGamma)
+            shear_factor = (1-lensKappa-lensGamma)/(1-lensKappa+lensGamma)
+
+
+        def lnlikelihood(pars,image,sigma):
+            xc,yc,mag,radius,axis_ratio,position_angle = pars
+            model = simulation.generate_sersic_model(imsize,\
+                        (xc,yc,mag-2.5*np.log10(lensMu),\
+                        radius*majAxis_Factor,1.0,\
+                        axis_ratio*shear_factor,position_angle),\
+                        mag_zeropoint,exposure_time)
+            return -0.5*np.sum( (image-model)*(image-model)/(sigma*sigma) + np.log(2*np.pi*sigma*sigma) )
+
+        def prior(pars):
+            x,y,m,r,q,t=pars
+        ##    ,n,q,t=pars
+            if (21<m<35) and (0<r<50) and (0<q<1) and (-90<t<90):
+                return 0.0
+            return -np.inf
+
+        def lnprobability(pars,image,sigma):
+            pr = prior(pars)
+            if not np.isfinite(pr):
+                return -np.inf
+            LL = pr + lnlikelihood(pars,image,sigma)
+            if np.isfinite(LL):
+                return LL
+            else:
+                return -np.inf
+
+
+        masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
+        masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
+
+        ndim, nwalkers = len(initPars), nchain
+        pos = np.array([initPars + 5e-1*np.random.randn(ndim) for i in range(nwalkers)])
+
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability, args=(masked_image, masked_sigma))
+
+        tstart = time.time()
+        sampler.run_mcmc(pos, nsamples)
+        print('elapsed %.8f seconds'%(time.time()-tstart))
+        return sampler.chain[:, nexclude:, :].reshape((-1, ndim)).T
+
+
+    def montecarlo_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars,nRun = 10,verbose=False):
+
+
 
         N,M=self.cutout.shape
         pars = initPars
+        if self.sigmaImage is None:
+            sigma = np.ones_like(self.cutout)
+        else:
+            sigma = self.sigmaImage
 
         if lensingPars is None:
             lensMu = 1
@@ -137,25 +211,27 @@ class Galaxy(object):
         while i < nRun:
 
             xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = self.randomize_new_pars(Nchain[:,i-1])
-            # model = simulation.generate_sersic_model((N,M),\
-            #             (xc,yc,mag-2.5*np.log10(lensMu),\
-            #             radius*majAxis_Factor,1,\
-            #             axis_ratio*shear_factor,position_angle),\
-            #             mag_zeropoint,exposure_time)
-            #
+            model = simulation.generate_sersic_model((N,M),\
+                        (xc,yc,mag-2.5*np.log10(lensMu),\
+                        radius*majAxis_Factor,1.0,\
+                        axis_ratio*shear_factor,position_angle),\
+                        mag_zeropoint,exposure_time)
+
             # if self.psf is not None:
             #     model = convolve(model,self.psf)
 
-            model = galfit.galaxy_maker(mag_zeropoint,N,M,"sersic",xc,yc,\
-            (mag,radius,sersic_index,axis_ratio),position_angle,sky=0,psfname=self.psfname)
+            # model = galfit.galaxy_maker(mag_zeropoint,N,M,"sersic",xc,yc,\
+            # (mag,radius,sersic_index,axis_ratio),position_angle,sky=0,psfname=self.psfname)
 
             diff_image = (model-self.cutout)*np.abs(1-self.mask)
 
-            newChi = np.sum((diff_image*diff_image).ravel())
+            newChi = np.sum((diff_image*diff_image/(sigma*sigma)).ravel())
 
-            print(i,newChi,newChi/oldChi)
-            if newChi/oldChi > np.random.uniform(1,1.05):
-                print("Rejected Fit")
+            if verbose:
+                print(i,newChi,newChi/oldChi)
+            if newChi/oldChi > np.random.uniform(1,1.5):
+                if verbose:
+                    print("Rejected Fit")
                 continue
             else:
                 Nchain[:,i] = xc,yc,mag,radius,sersic_index,axis_ratio,position_angle
@@ -165,7 +241,7 @@ class Galaxy(object):
 
         return Nchain
 
-    def fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,oversampling=3,nRun=10):
+    def fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,oversampling=3,nRun=10,verbose=False):
 
 
         if self.cutout is None:
@@ -174,6 +250,7 @@ class Galaxy(object):
         if self.mask is None:
             raise ValueError("No mask defined for this galaxy.")
 
-        modelChain = self.montecarlo_fit(initPars,mag_zeropoint,exposure_time,lensingPars,nRun=nRun)
+        modelChain = self.montecarlo_fit(initPars,mag_zeropoint,exposure_time,\
+                                         lensingPars,nRun=nRun,verbose=verbose)
 
         return modelChain
