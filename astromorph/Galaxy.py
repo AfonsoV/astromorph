@@ -99,7 +99,7 @@ class Galaxy(object):
             self.psf = snd.shift(self.psf,+0.5)
 
         if resize is not None:
-            self.psf = self.psf[75:126,75:126]
+            self.psf = self.psf[50:-50,50:-50]
         return None
 
     def set_sigma(self,sigma):

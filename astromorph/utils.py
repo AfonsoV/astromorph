@@ -1769,7 +1769,7 @@ def get_bounding_box(imgname,coords,size,pixelscale):
     --------
 
     """
-    centerCoords = get_center_coords(imgname,coords.ra.value,coords.dec.value)
+    centerCoords = get_center_coords(imgname,coords.ra.value[0],coords.dec.value[0])
     hsize = int(size/pixelscale)//2
     header = pyfits.getheader(imgname)
 
