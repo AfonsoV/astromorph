@@ -2,8 +2,8 @@ import matplotlib.pyplot as mpl
 import numpy as np
 import astropy.io.fits as pyfits
 import scipy.ndimage as snd
-from astropy.convolution import convolve
-
+from astropy.convolution import convolve_fft
+from scipy.signal import fftconvolve
 from . import utils
 from . import plot_utils as putils
 from . import simulation
@@ -77,6 +77,14 @@ class Galaxy(object):
         self.set_segmentation_mask(segmap - objmap)
         return self.mask
 
+    def create_object_mask(self,pixscale,radius,**kwargs):
+        N,M=self.cutout.shape
+        xc=N/2
+        yc=M/2
+        segmap = utils.gen_segmap_tresh(self.cutout,xc,yc,pixscale,radius=radius,**kwargs)
+        objmap = utils.select_object_map(xc,yc,segmap,pixscale,radius)
+        return objmap
+
     def set_psf(self,filename=None,psfdata=None,resize=None):
         if filename is not None:
             self.psfname = filename
@@ -97,6 +105,23 @@ class Galaxy(object):
     def set_sigma(self,sigma):
         self.sigmaImage = sigma
         return None
+
+    def estimate_parameters(self,mag_zeropoint,exposure_time,pixscale,radius,rPsf=2.5,**kwargs):
+        if self.mask is not None:
+            detection_image = self.cutout*(1-self.mask)
+        else:
+            detection_image = self.cutout
+        object_mask = self.create_object_mask(pixscale,radius,**kwargs)
+
+        xc,yc=utils.barycenter(self.cutout,object_mask)
+        mag = -2.5*np.log10(np.sum(self.cutout*object_mask)/exposure_time)+mag_zeropoint
+        # r100 = max(0.5,np.sqrt(self.cutout[object_mask==1].size/np.pi - 2.5*2.5))
+        r50 = utils.get_half_ligh_radius(self.cutout,object_mask)
+        r50 = max(0.5,np.sqrt(r50*r50-rPsf*rPsf))
+        axisRatio = utils.get_axis_ratio(self.cutout,object_mask)
+        positionAngle = utils.get_position_angle(self.cutout,object_mask) - 90
+
+        return (xc,yc,mag,r50,axisRatio,positionAngle)
 
     def randomize_new_pars(self,pars):
         xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = pars
@@ -148,12 +173,22 @@ class Galaxy(object):
                         radius*majAxis_Factor,1.0,\
                         axis_ratio*shear_factor,position_angle),\
                         mag_zeropoint,exposure_time)
+
+            if self.psf is not None:
+                model = fftconvolve(model,self.psf,mode="same")
+                # model = convolve_fft(model,self.psf)
+
             return -0.5*np.sum( (image-model)*(image-model)/(sigma*sigma) + np.log(2*np.pi*sigma*sigma) )
 
         def prior(pars):
             x,y,m,r,q,t=pars
         ##    ,n,q,t=pars
-            if (21<m<35) and (0<r<50) and (0<q<1) and (-90<t<90):
+            if  (0<x<self.cutout.shape[1]) and\
+                (0<y<self.cutout.shape[0]) and\
+                (21<m<35) and\
+                (0.1<r<50) and\
+                (0.1<q<1) and\
+                (-90<t<90):
                 return 0.0
             return -np.inf
 
@@ -172,7 +207,15 @@ class Galaxy(object):
         masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
 
         ndim, nwalkers = len(initPars), nchain
-        pos = np.array([initPars + 5e-1*np.random.randn(ndim) for i in range(nwalkers)])
+        sigmaPars = [2.5,2.5,0.25,2.0,0.05,5.0]
+        pos = np.array([np.random.normal(initPars,sigmaPars) for i in range(nwalkers)])
+        pos[:,0][pos[:,0]<0]=1
+        pos[:,0][pos[:,0]>self.cutout.shape[0]]=self.cutout.shape[0]-1
+        pos[:,1][pos[:,1]<0]=1
+        pos[:,1][pos[:,1]>self.cutout.shape[1]]=self.cutout.shape[1]-1
+        pos[:,3][pos[:,3]<0]=1
+        pos[:,4][pos[:,4]<=0]=0.1
+        pos[:,4][pos[:,4]>1]=1.0
 
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability, args=(masked_image, masked_sigma))
 

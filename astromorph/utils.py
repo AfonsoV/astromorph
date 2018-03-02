@@ -58,10 +58,10 @@ def barycenter(img,segmap):
     binary_mask[segmap!=0]=1
 
     N,M=img.shape
-    XX,YY=np.meshgrid(range(M),range(N))
+    YY,XX=np.meshgrid(range(M),range(N))
     gal=np.abs(img*binary_mask)
-    Y = np.average(XX,weights=gal)
-    X = np.average(YY,weights=gal)
+    Y = np.average(YY,weights=gal)
+    X = np.average(XX,weights=gal)
     return (X,Y)
 
 def moments(img,segmap):
@@ -98,12 +98,60 @@ def moments(img,segmap):
     binary_mask[segmap!=0]=1
 
     N,M=img.shape
-    XX,YY=np.meshgrid(range(M),range(N))
+    YY,XX=np.meshgrid(range(M),range(N))
     gal=img*binary_mask
-    X2 = np.average(XX*XX,weights=gal)
-    Y2 = np.average(YY*YY,weights=gal)
-    XY = np.average(XX*YY,weights=gal)
+    xmed,ymed = barycenter(img,binary_mask)
+
+    X2 = np.average(XX*XX,weights=gal) - xmed*xmed
+    Y2 = np.average(YY*YY,weights=gal) - ymed*ymed
+    XY = np.average(XX*YY,weights=gal) - xmed*ymed
+
     return X2,Y2,XY
+
+def get_half_ligh_radius(img,segmap,axisRatio=None,positionAngle=None):
+    r"""Compute the half-light radius of an object given an image and a
+        segmentation mask.
+
+    Parameters
+    ----------
+    img : float, array
+        The image array containing the data for which to compute the light
+        moments
+    segmap: int, array
+        A binary image array flagging all pixels to be considered for the
+        computation. It uses all pixels with non-zero values.
+
+    Returns
+    -------
+    r : float
+        The estimated half-light radius for the input image.
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    totalFlux = np.sum(img*segmap)
+    xc,yc = barycenter(img,segmap)
+
+    if axisRatio is None:
+        axisRatio = get_axis_ratio(img,segmap)
+    if positionAngle is None:
+        positionAngle = get_position_angle(img,segmap)
+
+    dmat = compute_ellipse_distmat(img,xc,yc,axisRatio,positionAngle)
+
+    dr0 = 0.1
+    r0 = 0.5
+    F0 = 0.0
+    while F0 < 0.5*totalFlux:
+        F0 = np.sum(img[dmat<r0])
+        r0=r0+dr0
+
+
+    return r0
 
 def get_axis_ratio(img,segmap):
     r"""Computes the axis ratio of the image based on the provided segmentation
