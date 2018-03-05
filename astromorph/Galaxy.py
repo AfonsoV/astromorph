@@ -2,13 +2,14 @@ import matplotlib.pyplot as mpl
 import numpy as np
 import astropy.io.fits as pyfits
 import scipy.ndimage as snd
-from astropy.convolution import convolve
-
+from astropy.convolution import convolve_fft
+from scipy.signal import fftconvolve
 from . import utils
 from . import plot_utils as putils
 from . import simulation
 from . import galfit
 import time
+import emcee
 
 class Galaxy(object):
 
@@ -24,10 +25,17 @@ class Galaxy(object):
             self.cutout[np.isnan(self.cutout)]=0
         else:
             self.cutout = None
+            self.imgdata = pyfits.getdata(imgname)
+            self.imgheader = pyfits.getheader(imgname)
 
         self.psf = None
         self.psfname = "none"
         self.mask = None
+        self.sigmaImage = None
+
+    def set_coords(self,coords):
+        self.coords=coords
+        return None
 
     def draw_cutout(self,size,pixelscale,eixo=None,**kwargs):
         if self.cutout is None:
@@ -57,8 +65,9 @@ class Galaxy(object):
         return (fx(x0),fx(x1),fy(y0),fy(y1))
 
     def set_bounding_box(self,size,pixelscale):
-        self.bounding_box = utils.get_bounding_box(self.original_name,self.coords,size,pixelscale)
-        self.cutout = utils.get_cutout(self.original_name,self.coords,size,pixelscale)
+        self.bounding_box = utils.get_bounding_box(self.imgheader,self.coords,size,pixelscale)
+        x0,x1,y0,y1=self.bounding_box
+        self.cutout = self.imgdata[y0:y1,x0:x1]
         return None
 
     def set_segmentation_mask(self,mask):
@@ -75,16 +84,57 @@ class Galaxy(object):
         self.set_segmentation_mask(segmap - objmap)
         return self.mask
 
-    def set_psf(self,filename,resize=None):
-        self.psfname = filename
-        self.psf = pyfits.getdata(filename)
+    def create_object_mask(self,pixscale,radius,**kwargs):
+        N,M=self.cutout.shape
+        xc=N/2
+        yc=M/2
+        segmap = utils.gen_segmap_tresh(self.cutout,xc,yc,pixscale,radius=radius,**kwargs)
+        objmap = utils.select_object_map(xc,yc,segmap,pixscale,radius)
+        return objmap
+
+    def set_psf(self,filename=None,psfdata=None,resize=None):
+        if filename is not None:
+            self.psfname = filename
+            self.psf = pyfits.getdata(filename)
+        elif psfdata is not None:
+            self.psf = psfdata
+        else:
+            raise ValueError("Either filename or psfdata must be given.")
+
         if self.psf.shape[0]%2==0:
             self.psf = np.pad(self.psf,((0,1),(0,1)),mode="edge")
             self.psf = snd.shift(self.psf,+0.5)
 
         if resize is not None:
-            self.psf = self.psf[75:126,75:126]
+            self.psf = self.psf[50:-50,50:-50]
         return None
+
+    def set_sigma(self,sigma):
+        self.sigmaImage = sigma
+        return None
+
+    def estimate_parameters(self,mag_zeropoint,exposure_time,pixscale,radius,rPsf=2.5,**kwargs):
+        if self.mask is not None:
+            detection_image = self.cutout*(1-self.mask)
+        else:
+            detection_image = self.cutout
+        object_mask = self.create_object_mask(pixscale,radius,**kwargs)
+
+        xc,yc=utils.barycenter(self.cutout,object_mask)
+        mag = -2.5*np.log10(np.sum(self.cutout*object_mask)/exposure_time)+mag_zeropoint
+        # r100 = max(0.5,np.sqrt(self.cutout[object_mask==1].size/np.pi - 2.5*2.5))
+        r50 = utils.get_half_ligh_radius(self.cutout,object_mask)
+        r50 = max(0.5,np.sqrt(r50*r50-rPsf*rPsf))
+        axisRatio = utils.get_axis_ratio(self.cutout,object_mask)
+        positionAngle = utils.get_position_angle(self.cutout,object_mask) - 90
+
+        while positionAngle>90:
+            positionAngle -= 180
+
+        while positionAngle<-90:
+            positionAngle += 180
+
+        return (xc,yc,mag,r50,axisRatio,positionAngle)
 
     def randomize_new_pars(self,pars):
         xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = pars
@@ -114,10 +164,93 @@ class Galaxy(object):
 
         return new_xc,new_yc,new_mag,new_radius,new_sersic_index,new_axis_ratio,new_position_angle
 
-    def montecarlo_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars,nRun = 10):
+
+    def emcee_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=20,nsamples=10000):
+        nexclude = nsamples//2
+
+        imsize = self.cutout.shape
+        if lensingPars is None:
+            lensMu = 1
+            majAxis_Factor = 1
+            shear_factor = 1
+            lensAngle=0
+        else:
+            lensKappa,lensGamma,lensMu,lensAngle = lensingPars
+            majAxis_Factor = 1/np.abs(1-lensKappa-lensGamma)
+            shear_factor = (1-lensKappa-lensGamma)/(1-lensKappa+lensGamma)
+
+        def lnlikelihood(pars,image,sigma):
+            xc,yc,mag,radius,axis_ratio,position_angle,sky = pars
+            model = simulation.generate_sersic_model(imsize,\
+                        (xc,yc,mag-2.5*np.log10(lensMu),\
+                        radius*majAxis_Factor,1.0,\
+                        axis_ratio*shear_factor,position_angle),\
+                        mag_zeropoint,exposure_time)
+
+            if self.psf is not None:
+                model = fftconvolve(model,self.psf,mode="same")
+                # model = convolve_fft(model,self.psf)
+            model+=sky
+
+            return -0.5*np.ma.sum( (image-model)*(image-model)/(sigma*sigma) + np.ma.log(2*np.pi*sigma*sigma) )
+
+        def prior(pars):
+            x,y,m,r,q,t,s=pars
+        ##    ,n,q,t=pars
+            if  (0<x<self.cutout.shape[1]) and\
+                (0<y<self.cutout.shape[0]) and\
+                (21<m<35) and\
+                (0.1<r<50) and\
+                (0.1<q<1) and\
+                (-90<t<90):
+                return 0.0
+            return -np.inf
+
+        def lnprobability(pars,image,sigma):
+            pr = prior(pars)
+            if not np.isfinite(pr):
+                return -np.inf
+            LL = pr + lnlikelihood(pars,image,sigma)
+            if np.isfinite(LL):
+                return LL
+            else:
+                return -np.inf
+
+
+        masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
+        masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
+
+        ndim, nwalkers = len(initPars), nchain
+        sigmaPars = [2.5,2.5,0.5,5.0,0.075,5.0,0.05*initPars[-1]]
+        pos = np.array([np.random.normal(initPars,sigmaPars) for i in range(nwalkers)])
+        pos[:,0][pos[:,0]<0]=1
+        pos[:,0][pos[:,0]>self.cutout.shape[0]]=self.cutout.shape[0]-1
+        pos[:,1][pos[:,1]<0]=1
+        pos[:,1][pos[:,1]>self.cutout.shape[1]]=self.cutout.shape[1]-1
+        pos[:,3][pos[:,3]<0]=1
+        pos[:,4][pos[:,4]<=0]=0.1
+        pos[:,4][pos[:,4]>1]=1.0
+
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability, args=(masked_image, masked_sigma))
+
+        tstart = time.time()
+        sampler.run_mcmc(pos, nsamples)
+        print('elapsed %.8f seconds'%(time.time()-tstart))
+        print("Mean acceptance fraction: %.3f"%(np.mean(sampler.acceptance_fraction)))
+        plot_results(sampler,[r"$x_c$",r"$y_c$",r'$mag$',\
+                              r'$r_e\ [\mathrm{arcsec}]$',r"$(b/a)$",\
+                              r"$\theta_\mathrm{PA}$",r"sky"])
+        return sampler.chain[:, nexclude:, :].reshape((-1, ndim)).T
+
+
+    def montecarlo_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars,nRun = 10,verbose=False):
 
         N,M=self.cutout.shape
         pars = initPars
+        if self.sigmaImage is None:
+            sigma = np.ones_like(self.cutout)
+        else:
+            sigma = self.sigmaImage
 
         if lensingPars is None:
             lensMu = 1
@@ -137,35 +270,37 @@ class Galaxy(object):
         while i < nRun:
 
             xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = self.randomize_new_pars(Nchain[:,i-1])
-            # model = simulation.generate_sersic_model((N,M),\
-            #             (xc,yc,mag-2.5*np.log10(lensMu),\
-            #             radius*majAxis_Factor,1,\
-            #             axis_ratio*shear_factor,position_angle),\
-            #             mag_zeropoint,exposure_time)
-            #
-            # if self.psf is not None:
-            #     model = convolve(model,self.psf)
+            model = simulation.generate_sersic_model((N,M),\
+                        (xc,yc,mag-2.5*np.log10(lensMu),\
+                        radius*majAxis_Factor,1.0,\
+                        axis_ratio*shear_factor,position_angle),\
+                        mag_zeropoint,exposure_time)
 
-            model = galfit.galaxy_maker(mag_zeropoint,N,M,"sersic",xc,yc,\
-            (mag,radius,sersic_index,axis_ratio),position_angle,sky=0,psfname=self.psfname)
+            if self.psf is not None:
+                model = fftconvolve(model,self.psf)
+
+            # model = galfit.galaxy_maker(mag_zeropoint,N,M,"sersic",xc,yc,\
+            # (mag,radius,sersic_index,axis_ratio),position_angle,sky=0,psfname=self.psfname)
 
             diff_image = (model-self.cutout)*np.abs(1-self.mask)
 
-            newChi = np.sum((diff_image*diff_image).ravel())
+            newChi = np.sum((diff_image*diff_image/(sigma*sigma)).ravel())
 
-            print(i,newChi,newChi/oldChi)
-            if newChi/oldChi > np.random.uniform(1,1.05):
-                print("Rejected Fit")
+            if verbose:
+                print(i,newChi,newChi/oldChi)
+            if newChi/oldChi > np.random.uniform(1,1.5):
+                if verbose:
+                    print("Rejected Fit")
                 continue
             else:
-                Nchain[:,i] = xc,yc,mag,radius,sersic_index,axis_ratio,position_angle
+                Nchain[:,i] = xc,yc,mag,radius,1.0,axis_ratio,position_angle
                 oldChi = newChi
                 i+=1
 
 
         return Nchain
 
-    def fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,oversampling=3,nRun=10):
+    def fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,oversampling=3,nRun=10,verbose=False):
 
 
         if self.cutout is None:
@@ -174,6 +309,37 @@ class Galaxy(object):
         if self.mask is None:
             raise ValueError("No mask defined for this galaxy.")
 
-        modelChain = self.montecarlo_fit(initPars,mag_zeropoint,exposure_time,lensingPars,nRun=nRun)
+        modelChain = self.montecarlo_fit(initPars,mag_zeropoint,exposure_time,\
+                                         lensingPars,nRun=nRun,verbose=verbose)
 
         return modelChain
+
+
+
+def plot_results(sampler,pars):
+    import matplotlib.gridspec as gridspec
+    assert len(pars)==sampler.dim
+    nwalkers = sampler.chain.shape[0]
+    NP=len(pars)
+
+    fig=mpl.figure(figsize=(25,NP*4))
+
+    gs = gridspec.GridSpec(NP, 2,width_ratios=[5,1])
+    ax = [mpl.subplot(gs[i]) for i in range(0,2*NP,2)] +[mpl.subplot(gs[i]) for i in range(1,2*NP,2)]
+    mpl.subplots_adjust(hspace=0.0,wspace=0.0)
+
+    for n in range(NP):
+        for i in range(nwalkers):
+            ax[n].plot(sampler.chain[i,:,n],color='k',alpha=0.35)
+            ax[n].set_ylabel(pars[n])
+
+        ax[NP+n].hist(sampler.flatchain[:,n],bins=50,orientation='horizontal',color='silver',histtype='stepfilled')
+        if n<(NP-1):
+            ax[n].tick_params(labelbottom='off')
+            ax[NP+n].tick_params(labelbottom='off')
+        ax[NP+n].tick_params(labelleft='off')
+
+    ax[NP-1].set_xlabel(r'$N_\mathrm{step}$')
+    ax[-1].set_xlabel(r'$N_\mathrm{sol}$')
+
+    return fig,ax

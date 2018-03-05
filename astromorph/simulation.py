@@ -14,7 +14,8 @@ import matplotlib.pyplot as mpl
 import matplotlib.ticker as mpt
 import matplotlib.patches as mpa
 
-from astropy.convolution import convolve,Gaussian2DKernel,Moffat2DKernel
+from astropy.convolution import Gaussian2DKernel,Moffat2DKernel
+from scipy.signal import fftconvolve
 
 from . import utils
 
@@ -316,6 +317,51 @@ def test_sersic():
     mpl.show()
     return
 
+def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,exposure_time,psf=None):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+
+    xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = modelPars
+    lensKappa,lensGamma,lensMu,lensAngle = lensingPars
+
+    majAxis_Factor = 1/np.abs(1-lensKappa-lensGamma)
+    shear_factor = (1-lensKappa-lensGamma)/(1-lensKappa+lensGamma)
+
+    ang_rad = np.radians(lensAngle)
+    X,Y = np.meshgrid(range(shape[0]),range(shape[1]))
+    X -= xc
+    Y -= yc
+
+    rLensX=(X)*np.cos(ang_rad)-(Y)*np.sin(ang_rad)
+    rLensY=(X)*np.sin(ang_rad)+(Y)*np.cos(ang_rad)
+
+    rLensX /= (1-lensKappa-lensGamma)
+    rLensY /= (1-lensKappa+lensGamma)
+    dmatLens = np.sqrt(rLensX*rLensX + rLensY*rLensY)
+
+    Pa_rad = np.radians(position_angle)
+    rLensGalX=(rLensX)*np.cos(Pa_rad)-(rLensY)*np.sin(Pa_rad)
+    rLensGalY=(rLensX)*np.sin(Pa_rad)+(rLensY)*np.cos(Pa_rad)
+    dmatGal = np.sqrt(rLensGalX*rLensGalX+(1/(axis_ratio*axis_ratio))*rLensGalY*rLensGalY)
+
+    totalFlux = exposure_time * 10**( -0.4*(mag-mag_zeropoint) )
+    Sigma_e = effective_intensity(totalFlux,radius,sersic_index)
+
+    return sersic(dmatGal,Sigma_e,radius,sersic_index)
+
 
 def generate_sersic_model(shape,modelPars,mag_zeropoint,exposure_time,psf=None):
     r"""
@@ -362,7 +408,7 @@ def galaxy_creation(imsize,xc,yc,I,r,n,q,theta,psf=None,**kwargs):
     if psf is None:
         galaxy = profile
     else:
-        galaxy = convolve(profile, psf)
+        galaxy = fftconvolve(profile, psf)
 
     return galaxy
 

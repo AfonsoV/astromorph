@@ -58,10 +58,10 @@ def barycenter(img,segmap):
     binary_mask[segmap!=0]=1
 
     N,M=img.shape
-    XX,YY=np.meshgrid(range(M),range(N))
+    YY,XX=np.meshgrid(range(M),range(N))
     gal=np.abs(img*binary_mask)
-    Y = np.average(XX,weights=gal)
-    X = np.average(YY,weights=gal)
+    Y = np.average(YY,weights=gal)
+    X = np.average(XX,weights=gal)
     return (X,Y)
 
 def moments(img,segmap):
@@ -98,12 +98,60 @@ def moments(img,segmap):
     binary_mask[segmap!=0]=1
 
     N,M=img.shape
-    XX,YY=np.meshgrid(range(M),range(N))
+    YY,XX=np.meshgrid(range(M),range(N))
     gal=img*binary_mask
-    X2 = np.average(XX*XX,weights=gal)
-    Y2 = np.average(YY*YY,weights=gal)
-    XY = np.average(XX*YY,weights=gal)
+    xmed,ymed = barycenter(img,binary_mask)
+
+    X2 = np.average(XX*XX,weights=gal) - xmed*xmed
+    Y2 = np.average(YY*YY,weights=gal) - ymed*ymed
+    XY = np.average(XX*YY,weights=gal) - xmed*ymed
+
     return X2,Y2,XY
+
+def get_half_ligh_radius(img,segmap,axisRatio=None,positionAngle=None):
+    r"""Compute the half-light radius of an object given an image and a
+        segmentation mask.
+
+    Parameters
+    ----------
+    img : float, array
+        The image array containing the data for which to compute the light
+        moments
+    segmap: int, array
+        A binary image array flagging all pixels to be considered for the
+        computation. It uses all pixels with non-zero values.
+
+    Returns
+    -------
+    r : float
+        The estimated half-light radius for the input image.
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    totalFlux = np.sum(img*segmap)
+    xc,yc = barycenter(img,segmap)
+
+    if axisRatio is None:
+        axisRatio = get_axis_ratio(img,segmap)
+    if positionAngle is None:
+        positionAngle = get_position_angle(img,segmap)
+
+    dmat = compute_ellipse_distmat(img,xc,yc,axisRatio,positionAngle)
+
+    dr0 = 0.1
+    r0 = 0.5
+    F0 = 0.0
+    while F0 < 0.5*totalFlux:
+        F0 = np.sum(img[dmat<r0])
+        r0=r0+dr0
+
+
+    return r0
 
 def get_axis_ratio(img,segmap):
     r"""Computes the axis ratio of the image based on the provided segmentation
@@ -250,6 +298,29 @@ def axis_ratio_from_moments(x2,y2,xy):
     return q
 
 
+def get_center_coords_hdr(header,ra,dec,hsize=1,verify_limits=True):
+    hdr=header
+    wcs=pywcs.WCS(hdr)
+
+    ctype=hdr["ctype1"]
+    xmax=hdr["naxis1"]
+    ymax=hdr["naxis2"]
+
+    if 'RA' in ctype:
+        sky=np.array([[ra,dec]],np.float_)
+    else:
+        sky=np.array([[dec,ra]],np.float_)
+
+    pixcrd=wcs.wcs_world2pix(sky,1)
+
+    xc=pixcrd[0,0]
+    yc=pixcrd[0,1]
+    if verify_limits:
+       if xc>xmax-hsize or yc >ymax-hsize or xc<hsize or yc<hsize:
+           raise IndexError("X=%.3f, Y=%.3f out of image bounds"%(xc,yc))
+
+    return (xc,yc)
+
 def get_center_coords(imgname,ra,dec,hsize=1,verify_limits=True):
     r""" Computes the x,y coordinates of a ra,dec position in a given image.
 
@@ -281,27 +352,9 @@ def get_center_coords(imgname,ra,dec,hsize=1,verify_limits=True):
     --------
 
     """
-    hdu=pyfits.open(imgname)
-    wcs=pywcs.WCS(hdu[0].header)
+    hdr=pyfits.getheader(imgname)
 
-    ctype=hdu[0].header["ctype1"]
-    xmax=hdu[0].header["naxis1"]
-    ymax=hdu[0].header["naxis2"]
-
-    if 'RA' in ctype:
-        sky=np.array([[ra,dec]],np.float_)
-    else:
-        sky=np.array([[dec,ra]],np.float_)
-
-    pixcrd=wcs.wcs_world2pix(sky,1)
-
-    xc=pixcrd[0,0]
-    yc=pixcrd[0,1]
-    if verify_limits:
-       if xc>xmax-hsize or yc >ymax-hsize or xc<hsize or yc<hsize:
-           raise IndexError("X=%.3f, Y=%.3f out of image bounds"%(xc,yc))
-
-    return (xc,yc)
+    return get_center_coords_hdr(hdr,ra,dec,hsize=1,verify_limits=verify_limits)
 
 def compute_ellipse_distmat(img,xc,yc,q=1.00,ang=0.00):
     r"""Compute a matrix with dimensions of the image where in each pixel we
@@ -746,8 +799,7 @@ def gen_segmap_tresh(img,xc,yc,pixscale,radius =0.5,thresh=5.0,Amin=5,k_sky=3,al
     N,M=img.shape
     MAP = np.zeros([N,M])
     sky_mean,sky_std=sky_value(img,k=k_sky)
-    print(50*"=",sky_mean,sky_std)
-    print(img)
+
     MAP[img > sky_mean+thresh*sky_std] = 1
     Regions,Nregions=sci_nd.label(MAP)
     for n in range(1,Nregions+1):
@@ -1688,7 +1740,7 @@ def rebin2d(img,size_out,flux_scale=False):
         return img_bin.transpose()/(xbox*ybox)
 
 
-def get_bounding_box(imgname,coords,size,pixelscale):
+def get_bounding_box(header,coords,size,pixelscale):
     r""" Returns a square bounding box coordinates (in pixels) centered in
     coords (astropy SkyCoord with ra,dec) and 'size' width in arcseconds.
     It requires the pixel scale (in arcseconds per pixel).
@@ -1696,8 +1748,8 @@ def get_bounding_box(imgname,coords,size,pixelscale):
     Parameters
     ----------
 
-    imgname : str
-        The name of the fits image to get the bounding box for.
+    header : io.fits header object
+        The header of the fits file to get the bounding box for.
 
     coords : astropy.coordinates.SkyCoord
         A set of coordinates (with ra,dec values) representing the center of
@@ -1722,14 +1774,8 @@ def get_bounding_box(imgname,coords,size,pixelscale):
     --------
 
     """
-    centerCoords = get_center_coords(imgname,coords.ra.value,coords.dec.value)
+    centerCoords = get_center_coords_hdr(header,coords.ra.value[0],coords.dec.value[0])
     hsize = int(size/pixelscale)//2
-
-    # if centerCoords[0] > data.shape[0] or\
-    #         centerCoords[1] > data.shape[1] or\
-    #         centerCoords[0] < 0 or\
-    #         centerCoords[1] < 0 :
-    #     return None
 
     xl = int(centerCoords[0]-hsize)
     xu = int(centerCoords[0]+hsize)
@@ -1770,7 +1816,8 @@ def get_cutout(imgname,coords,size,pixelscale):
     --------
 
     """
-    boxCoords = get_bounding_box(imgname,coords,size,pixelscale)
+    header = pyfits.getheader(imgname)
+    boxCoords = get_bounding_box(header,coords,size,pixelscale)
     if boxCoords is None:
         return None
     else:

@@ -5,23 +5,75 @@ from . import utils
 from . import plot_utils as putils
 from .cosmology import angular_distance
 
+class Error(Exception):
+    """Base class for exceptions in this module."""
+    pass
+
+class ModelError(Error):
+    """Exception raised for errors in the model definition.
+
+    Attributes:
+        message -- explanation of the error
+    """
+
+    def __init__(self, message):
+        self.message = message
+
+
 class LensingModel(object):
 
-    def __init__(self,model_root,redshift_lens,pixel_scale):
-        self.modelname = model_root
-        self.header = pyfits.getheader("%s_gamma.fits"%(model_root))
-        self.gamma = pyfits.getdata("%s_gamma.fits"%(model_root))
-        self.kappa = pyfits.getdata("%s_kappa.fits"%(model_root))
-        # self.xdeflect = pyfits.getdata("%s_x-arcsec-deflect.fits"%(model_root))
-        # self.ydeflect = pyfits.getdata("%s_y-arcsec-deflect.fits"%(model_root))
+    def __init__(self,redshift_lens,pixelScale):
+        self.gamma = None
+        self.kappa = None
+        self.xdeflect = None
+        self.ydeflect = None
+
+        self.kappa_at_z = None
+        self.gamma_at_z = None
+        self.mu_at_z = None
+        self.xdeflect_at_z = None
+        self.ydeflect_at_z = None
 
         self.lens_redshift = redshift_lens
-        self.pixel_scale = pixel_scale
+        self.pixelScale = pixelScale
 
+    def set_lensing_data(self,filename=None,gamma=None,kappa=None,xdeflect=None,ydeflect=None,extent=None):
+        if filename is not None:
+            self.modelname = filename
+            self.header = pyfits.getheader("%s_gamma.fits"%(filename))
+            self.gamma = pyfits.getdata("%s_gamma.fits"%(filename))
+            self.kappa = pyfits.getdata("%s_kappa.fits"%(filename))
+            self.xdeflect = pyfits.getdata("%s_x-arcsec-deflect.fits"%(filename))
+            self.ydeflect = pyfits.getdata("%s_y-arcsec-deflect.fits"%(filename))
+        elif (kappa is not None) and (gamma is not None) and (xdeflect is not None) and (ydeflect is not None):
+            self.modelname = None
+            self.gamma = gamma
+            self.kappa = kappa
+            self.xdeflect = xdeflect
+            self.ydeflect = ydeflect
+            self.modelExtent = extent
+        else:
+            raise ModelError("Either a filename is given or all 4 components (gamma,kappa,xy-deflection) must be given.")
 
-    def set_bounding_box(self,size,coords):
-        return utils.get_bounding_box("%s_gamma.fits"%(self.modelname),coords,size,\
-                                self.pixel_scale)
+    def set_bounding_box(self,size,coords,pixelScale=None):
+        if pixelScale is None:
+            pixelScale = self.pixelScale
+        if self.modelname is not None:
+            return utils.get_bounding_box(pyfits.getheader("%s_gamma.fits"%(self.modelname)),coords,size,\
+                                pixelScale)
+        elif self.modelExtent is not None:
+            ra = np.linspace(self.modelExtent[0],self.modelExtent[1],self.gamma.shape[1])
+            dec = np.linspace(self.modelExtent[2],self.modelExtent[3],self.gamma.shape[0])
+            ky = np.where(ra>coords.ra.value)[0][0]
+            kx = np.where(dec>coords.dec.value)[0][0]
+            hsize = int(size/pixelScale)//2
+            xl = int(kx-hsize)
+            xu = int(kx+hsize)
+            yl = int(ky-hsize)
+            yu = int(ky+hsize)
+            return (xl,xu,yl,yu)
+        else:
+            raise ModelError("Neither a file nor an extent set is defined for this model to get coordinates from.")
 
     def get_image_box_coordinates(self):
         def fx(x):
@@ -31,19 +83,37 @@ class LensingModel(object):
         return (fx(0),fx(self.gamma.shape[1]),fy(0),fy(self.gamma.shape[0]))
 
 
-    def get_magnification(self,redshift,minMag=5e-2):
 
+    def set_model_at_z(self,redshift,**kwargs):
         dlens = angular_distance(self.lens_redshift)
         dsource = angular_distance(redshift)
         dlens_source = dsource - (1+self.lens_redshift)/(1+redshift)*dlens
 
-        kappa_at_z = self.kappa * (dlens_source/dsource)
-        gamma_at_z = self.kappa * (dlens_source/dsource)
+        self.kappa_at_z = self.kappa * (dlens_source/dsource)
+        self.gamma_at_z = self.gamma * (dlens_source/dsource)
+        self.xdeflect_at_z = self.xdeflect * (dlens_source/dsource)
+        self.ydeflect_at_z = self.ydeflect * (dlens_source/dsource)
 
-        divFactor = np.abs((1-kappa_at_z)*(1-kappa_at_z) - gamma_at_z*gamma_at_z)
+        self.get_magnification(redshift,**kwargs)
+        return None
+
+    def compute_shear_angle(self,redshift):
+        if self.xdeflect_at_z is None or self.ydeflect_at_z is None:
+            self.set_model_at_z(redshift)
+        dxd_dy,dxd_dx = np.gradient(self.xdeflect_at_z)
+        dyd_dy,dyd_dx = np.gradient(self.ydeflect_at_z)
+        self.shear_angle = np.degrees(np.arctan2(-0.5*(dxd_dy+dyd_dx),+0.5*(dyd_dy-dxd_dx)))
+        return self.shear_angle
+
+    def get_magnification(self,redshift,minMag=5e-2):
+
+        if self.kappa_at_z is None or self.gamma_at_z is None:
+            self.set_model_at_z(redshift)
+
+        divFactor = np.abs((1-self.kappa_at_z)*(1-self.kappa_at_z) - self.gamma_at_z*self.gamma_at_z)
         divFactor[divFactor==0]=minMag
-        self.mu = 1/divFactor
-        return self.mu
+        self.mu_at_z = 1/divFactor
+        return self.mu_at_z
 
     def draw_cutout(self,size,coords,component="gamma",eixo=None,**kwargs):
         if eixo is None:
@@ -70,9 +140,10 @@ class LensingModel(object):
         return None
 
     def get_lensing_parameters_at_position(self,coords,window=5):
-        xl,xu,yl,yu = utils.get_bounding_box("%s_gamma.fits"%(self.modelname),coords,\
-                                        window,1.0)
-        medKappa = np.median(self.kappa[yl:yu,xl:xu])
-        medGamma = np.median(self.gamma[yl:yu,xl:xu])
-        medMu = np.median(self.mu[yl:yu,xl:xu])
-        return (medKappa,medGamma,medMu)
+        xl,xu,yl,yu = self.set_bounding_box(window,coords,pixelScale=1.0)
+
+        medKappa = np.median(self.kappa_at_z[yl:yu,xl:xu])
+        medGamma = np.median(self.gamma_at_z[yl:yu,xl:xu])
+        medMu = np.median(self.mu_at_z[yl:yu,xl:xu])
+        medAngle = np.median(self.shear_angle[yl:yu,xl:xu])
+        return (medKappa,medGamma,medMu,medAngle)
