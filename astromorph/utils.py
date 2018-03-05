@@ -298,6 +298,29 @@ def axis_ratio_from_moments(x2,y2,xy):
     return q
 
 
+def get_center_coords_hdr(header,ra,dec,hsize=1,verify_limits=True):
+    hdr=header
+    wcs=pywcs.WCS(hdr)
+
+    ctype=hdr["ctype1"]
+    xmax=hdr["naxis1"]
+    ymax=hdr["naxis2"]
+
+    if 'RA' in ctype:
+        sky=np.array([[ra,dec]],np.float_)
+    else:
+        sky=np.array([[dec,ra]],np.float_)
+
+    pixcrd=wcs.wcs_world2pix(sky,1)
+
+    xc=pixcrd[0,0]
+    yc=pixcrd[0,1]
+    if verify_limits:
+       if xc>xmax-hsize or yc >ymax-hsize or xc<hsize or yc<hsize:
+           raise IndexError("X=%.3f, Y=%.3f out of image bounds"%(xc,yc))
+
+    return (xc,yc)
+
 def get_center_coords(imgname,ra,dec,hsize=1,verify_limits=True):
     r""" Computes the x,y coordinates of a ra,dec position in a given image.
 
@@ -329,27 +352,9 @@ def get_center_coords(imgname,ra,dec,hsize=1,verify_limits=True):
     --------
 
     """
-    hdu=pyfits.open(imgname)
-    wcs=pywcs.WCS(hdu[0].header)
+    hdr=pyfits.getheader(imgname)
 
-    ctype=hdu[0].header["ctype1"]
-    xmax=hdu[0].header["naxis1"]
-    ymax=hdu[0].header["naxis2"]
-
-    if 'RA' in ctype:
-        sky=np.array([[ra,dec]],np.float_)
-    else:
-        sky=np.array([[dec,ra]],np.float_)
-
-    pixcrd=wcs.wcs_world2pix(sky,1)
-
-    xc=pixcrd[0,0]
-    yc=pixcrd[0,1]
-    if verify_limits:
-       if xc>xmax-hsize or yc >ymax-hsize or xc<hsize or yc<hsize:
-           raise IndexError("X=%.3f, Y=%.3f out of image bounds"%(xc,yc))
-
-    return (xc,yc)
+    return get_center_coords_hdr(hdr,ra,dec,hsize=1,verify_limits=verify_limits)
 
 def compute_ellipse_distmat(img,xc,yc,q=1.00,ang=0.00):
     r"""Compute a matrix with dimensions of the image where in each pixel we
@@ -1735,7 +1740,7 @@ def rebin2d(img,size_out,flux_scale=False):
         return img_bin.transpose()/(xbox*ybox)
 
 
-def get_bounding_box(imgname,coords,size,pixelscale):
+def get_bounding_box(header,coords,size,pixelscale):
     r""" Returns a square bounding box coordinates (in pixels) centered in
     coords (astropy SkyCoord with ra,dec) and 'size' width in arcseconds.
     It requires the pixel scale (in arcseconds per pixel).
@@ -1743,8 +1748,8 @@ def get_bounding_box(imgname,coords,size,pixelscale):
     Parameters
     ----------
 
-    imgname : str
-        The name of the fits image to get the bounding box for.
+    header : io.fits header object
+        The header of the fits file to get the bounding box for.
 
     coords : astropy.coordinates.SkyCoord
         A set of coordinates (with ra,dec values) representing the center of
@@ -1769,9 +1774,8 @@ def get_bounding_box(imgname,coords,size,pixelscale):
     --------
 
     """
-    centerCoords = get_center_coords(imgname,coords.ra.value[0],coords.dec.value[0])
+    centerCoords = get_center_coords_hdr(header,coords.ra.value[0],coords.dec.value[0])
     hsize = int(size/pixelscale)//2
-    header = pyfits.getheader(imgname)
 
     xl = int(centerCoords[0]-hsize)
     xu = int(centerCoords[0]+hsize)
@@ -1812,7 +1816,8 @@ def get_cutout(imgname,coords,size,pixelscale):
     --------
 
     """
-    boxCoords = get_bounding_box(imgname,coords,size,pixelscale)
+    header = pyfits.getheader(imgname)
+    boxCoords = get_bounding_box(header,coords,size,pixelscale)
     if boxCoords is None:
         return None
     else:

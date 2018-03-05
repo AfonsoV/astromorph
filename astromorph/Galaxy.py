@@ -25,11 +25,17 @@ class Galaxy(object):
             self.cutout[np.isnan(self.cutout)]=0
         else:
             self.cutout = None
+            self.imgdata = pyfits.getdata(imgname)
+            self.imgheader = pyfits.getheader(imgname)
 
         self.psf = None
         self.psfname = "none"
         self.mask = None
         self.sigmaImage = None
+
+    def set_coords(self,coords):
+        self.coords=coords
+        return None
 
     def draw_cutout(self,size,pixelscale,eixo=None,**kwargs):
         if self.cutout is None:
@@ -59,8 +65,9 @@ class Galaxy(object):
         return (fx(x0),fx(x1),fy(y0),fy(y1))
 
     def set_bounding_box(self,size,pixelscale):
-        self.bounding_box = utils.get_bounding_box(self.original_name,self.coords,size,pixelscale)
-        self.cutout = utils.get_cutout(self.original_name,self.coords,size,pixelscale)
+        self.bounding_box = utils.get_bounding_box(self.imgheader,self.coords,size,pixelscale)
+        x0,x1,y0,y1=self.bounding_box
+        self.cutout = self.imgdata[y0:y1,x0:x1]
         return None
 
     def set_segmentation_mask(self,mask):
@@ -121,6 +128,12 @@ class Galaxy(object):
         axisRatio = utils.get_axis_ratio(self.cutout,object_mask)
         positionAngle = utils.get_position_angle(self.cutout,object_mask) - 90
 
+        while positionAngle>90:
+            positionAngle -= 180
+
+        while positionAngle<-90:
+            positionAngle += 180
+
         return (xc,yc,mag,r50,axisRatio,positionAngle)
 
     def randomize_new_pars(self,pars):
@@ -160,14 +173,14 @@ class Galaxy(object):
             lensMu = 1
             majAxis_Factor = 1
             shear_factor = 1
+            lensAngle=0
         else:
-            lensKappa,lensGamma,lensMu = lensingPars
+            lensKappa,lensGamma,lensMu,lensAngle = lensingPars
             majAxis_Factor = 1/np.abs(1-lensKappa-lensGamma)
             shear_factor = (1-lensKappa-lensGamma)/(1-lensKappa+lensGamma)
 
-
         def lnlikelihood(pars,image,sigma):
-            xc,yc,mag,radius,axis_ratio,position_angle = pars
+            xc,yc,mag,radius,axis_ratio,position_angle,sky = pars
             model = simulation.generate_sersic_model(imsize,\
                         (xc,yc,mag-2.5*np.log10(lensMu),\
                         radius*majAxis_Factor,1.0,\
@@ -177,11 +190,12 @@ class Galaxy(object):
             if self.psf is not None:
                 model = fftconvolve(model,self.psf,mode="same")
                 # model = convolve_fft(model,self.psf)
+            model+=sky
 
-            return -0.5*np.sum( (image-model)*(image-model)/(sigma*sigma) + np.log(2*np.pi*sigma*sigma) )
+            return -0.5*np.ma.sum( (image-model)*(image-model)/(sigma*sigma) + np.ma.log(2*np.pi*sigma*sigma) )
 
         def prior(pars):
-            x,y,m,r,q,t=pars
+            x,y,m,r,q,t,s=pars
         ##    ,n,q,t=pars
             if  (0<x<self.cutout.shape[1]) and\
                 (0<y<self.cutout.shape[0]) and\
@@ -207,7 +221,7 @@ class Galaxy(object):
         masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
 
         ndim, nwalkers = len(initPars), nchain
-        sigmaPars = [2.5,2.5,0.25,2.0,0.05,5.0]
+        sigmaPars = [2.5,2.5,0.5,5.0,0.075,5.0,0.05*initPars[-1]]
         pos = np.array([np.random.normal(initPars,sigmaPars) for i in range(nwalkers)])
         pos[:,0][pos[:,0]<0]=1
         pos[:,0][pos[:,0]>self.cutout.shape[0]]=self.cutout.shape[0]-1
@@ -222,12 +236,14 @@ class Galaxy(object):
         tstart = time.time()
         sampler.run_mcmc(pos, nsamples)
         print('elapsed %.8f seconds'%(time.time()-tstart))
+        print("Mean acceptance fraction: %.3f"%(np.mean(sampler.acceptance_fraction)))
+        plot_results(sampler,[r"$x_c$",r"$y_c$",r'$mag$',\
+                              r'$r_e\ [\mathrm{arcsec}]$',r"$(b/a)$",\
+                              r"$\theta_\mathrm{PA}$",r"sky"])
         return sampler.chain[:, nexclude:, :].reshape((-1, ndim)).T
 
 
     def montecarlo_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars,nRun = 10,verbose=False):
-
-
 
         N,M=self.cutout.shape
         pars = initPars
@@ -260,8 +276,8 @@ class Galaxy(object):
                         axis_ratio*shear_factor,position_angle),\
                         mag_zeropoint,exposure_time)
 
-            # if self.psf is not None:
-            #     model = convolve(model,self.psf)
+            if self.psf is not None:
+                model = fftconvolve(model,self.psf)
 
             # model = galfit.galaxy_maker(mag_zeropoint,N,M,"sersic",xc,yc,\
             # (mag,radius,sersic_index,axis_ratio),position_angle,sky=0,psfname=self.psfname)
@@ -277,7 +293,7 @@ class Galaxy(object):
                     print("Rejected Fit")
                 continue
             else:
-                Nchain[:,i] = xc,yc,mag,radius,sersic_index,axis_ratio,position_angle
+                Nchain[:,i] = xc,yc,mag,radius,1.0,axis_ratio,position_angle
                 oldChi = newChi
                 i+=1
 
@@ -297,3 +313,33 @@ class Galaxy(object):
                                          lensingPars,nRun=nRun,verbose=verbose)
 
         return modelChain
+
+
+
+def plot_results(sampler,pars):
+    import matplotlib.gridspec as gridspec
+    assert len(pars)==sampler.dim
+    nwalkers = sampler.chain.shape[0]
+    NP=len(pars)
+
+    fig=mpl.figure(figsize=(25,NP*4))
+
+    gs = gridspec.GridSpec(NP, 2,width_ratios=[5,1])
+    ax = [mpl.subplot(gs[i]) for i in range(0,2*NP,2)] +[mpl.subplot(gs[i]) for i in range(1,2*NP,2)]
+    mpl.subplots_adjust(hspace=0.0,wspace=0.0)
+
+    for n in range(NP):
+        for i in range(nwalkers):
+            ax[n].plot(sampler.chain[i,:,n],color='k',alpha=0.35)
+            ax[n].set_ylabel(pars[n])
+
+        ax[NP+n].hist(sampler.flatchain[:,n],bins=50,orientation='horizontal',color='silver',histtype='stepfilled')
+        if n<(NP-1):
+            ax[n].tick_params(labelbottom='off')
+            ax[NP+n].tick_params(labelbottom='off')
+        ax[NP+n].tick_params(labelleft='off')
+
+    ax[NP-1].set_xlabel(r'$N_\mathrm{step}$')
+    ax[-1].set_xlabel(r'$N_\mathrm{sol}$')
+
+    return fig,ax

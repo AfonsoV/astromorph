@@ -59,7 +59,7 @@ class LensingModel(object):
         if pixelScale is None:
             pixelScale = self.pixelScale
         if self.modelname is not None:
-            return utils.get_bounding_box("%s_gamma.fits"%(self.modelname),coords,size,\
+            return utils.get_bounding_box(pyfits.getheader("%s_gamma.fits"%(self.modelname)),coords,size,\
                                 pixelScale)
         elif self.modelExtent is not None:
             ra = np.linspace(self.modelExtent[0],self.modelExtent[1],self.gamma.shape[1])
