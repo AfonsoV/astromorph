@@ -78,7 +78,8 @@ class Galaxy(object):
         N,M=self.cutout.shape
         xc=N/2
         yc=M/2
-        segmap = utils.gen_segmap_tresh(self.cutout,xc,yc,pixscale,radius=radius,**kwargs)
+        # segmap = utils.gen_segmap_tresh(self.cutout,xc,yc,pixscale,radius=radius,**kwargs)
+        segmap = utils.gen_segmap_watershed(self.cutout,**kwargs)
         objmap = utils.select_object_map(xc,yc,segmap,pixscale,radius)
         segmap[segmap>0]=1
         self.set_segmentation_mask(segmap - objmap)
@@ -88,7 +89,7 @@ class Galaxy(object):
         N,M=self.cutout.shape
         xc=N/2
         yc=M/2
-        segmap = utils.gen_segmap_tresh(self.cutout,xc,yc,pixscale,radius=radius,**kwargs)
+        segmap = utils.gen_segmap_watershed(self.cutout,**kwargs)
         objmap = utils.select_object_map(xc,yc,segmap,pixscale,radius)
         return objmap
 
@@ -221,7 +222,7 @@ class Galaxy(object):
         masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
 
         ndim, nwalkers = len(initPars), nchain
-        sigmaPars = [2.5,2.5,0.5,5.0,0.075,5.0,0.05*initPars[-1]]
+        sigmaPars = [2.5,2.5,0.5,5.0,0.075,5.0,np.abs(0.05*initPars[-1])]
         pos = np.array([np.random.normal(initPars,sigmaPars) for i in range(nwalkers)])
         pos[:,0][pos[:,0]<0]=1
         pos[:,0][pos[:,0]>self.cutout.shape[0]]=self.cutout.shape[0]-1
