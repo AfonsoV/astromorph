@@ -1,6 +1,7 @@
 import matplotlib.pyplot as mpl
 import numpy as np
 import astropy.io.fits as pyfits
+import astropy.wcs as pywcs
 import scipy.ndimage as snd
 from astropy.convolution import convolve_fft
 from scipy.signal import fftconvolve
@@ -56,13 +57,13 @@ class Galaxy(object):
 
     def get_image_box_coordinates(self):
         assert (self.bounding_box  is not None),"A bounding box must be assigned to the galaxy"
-        header = pyfits.getheader(self.original_name)
+        header = self.imgheader
         x0,x1,y0,y1=self.bounding_box
-        def fx(x):
-            return (x-header["CRPIX1"])*header["CD1_1"] + header["CRVAL1"]
-        def fy(y):
-            return (y-header["CRPIX2"])*header["CD2_2"] + header["CRVAL2"]
-        return (fx(x0),fx(x1),fy(y0),fy(y1))
+        wcs=pywcs.WCS(header)
+        pixCoords=wcs.wcs_pix2world([[x0,y0],[x1,y1]],1)
+        pixLow = pixCoords[0]
+        pixHig = pixCoords[1]
+        return (pixLow[0],pixHig[0],pixLow[1],pixHig[1])
 
     def set_bounding_box(self,size,pixelscale):
         self.bounding_box = utils.get_bounding_box(self.imgheader,self.coords,size,pixelscale)

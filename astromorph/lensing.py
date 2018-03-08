@@ -1,5 +1,6 @@
 import numpy as np
 import astropy.io.fits as pyfits
+import astropy.wcs as pywcs
 
 from . import utils
 from . import plot_utils as putils
@@ -76,11 +77,13 @@ class LensingModel(object):
             raise ModelError("Neither a file nor an extent set is defined for this model to get coordinates from.")
 
     def get_image_box_coordinates(self):
-        def fx(x):
-            return (x-self.header["CRPIX1"])*self.header["CDELT1"] + self.header["CRVAL1"]
-        def fy(y):
-            return (y-self.header["CRPIX2"])*self.header["CDELT2"] + self.header["CRVAL2"]
-        return (fx(0),fx(self.gamma.shape[1]),fy(0),fy(self.gamma.shape[0]))
+        header = self.header
+        x0,x1,y0,y1=0,self.gamma.shape[1],0,self.gamma.shape[0]
+        wcs=pywcs.WCS(header)
+        pixCoords=wcs.wcs_pix2world([[x0,y0],[x1,y1]],1)
+        pixLow = pixCoords[0]
+        pixHig = pixCoords[1]
+        return (pixLow[0],pixHig[0],pixLow[1],pixHig[1])
 
 
 
