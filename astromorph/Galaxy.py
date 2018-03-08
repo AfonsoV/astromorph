@@ -114,20 +114,33 @@ class Galaxy(object):
         self.sigmaImage = sigma
         return None
 
+    def default_mask(self,radius):
+        if self.cutout is None:
+            raise ValueError("cutuout attribute must be defined.")
+
+        N,M = self.cutout.shape
+        xc,yc = N/2,M/2
+        R = utils.compute_ellipse_distmat(self.cutout,xc,yc)
+        mask = np.zeros_like(self.cutout)
+        mask[R<radius]=1
+        return mask
+
     def estimate_parameters(self,mag_zeropoint,exposure_time,pixscale,radius,rPsf=2.5,**kwargs):
         if self.mask is not None:
             detection_image = self.cutout*(1-self.mask)
         else:
             detection_image = self.cutout
-        object_mask = self.create_object_mask(pixscale,radius,**kwargs)
+        objectMask = self.create_object_mask(pixscale,radius,**kwargs)
+        if objectMask[objectMask>0].size ==0:
+            objectMask = self.default_mask(radius/pixscale)
 
-        xc,yc=utils.barycenter(self.cutout,object_mask)
-        mag = -2.5*np.log10(np.sum(self.cutout*object_mask)/exposure_time)+mag_zeropoint
+        xc,yc=utils.barycenter(self.cutout,objectMask)
+        mag = -2.5*np.log10(np.sum(self.cutout*objectMask)/exposure_time)+mag_zeropoint
         # r100 = max(0.5,np.sqrt(self.cutout[object_mask==1].size/np.pi - 2.5*2.5))
-        r50 = utils.get_half_ligh_radius(self.cutout,object_mask)
+        r50 = utils.get_half_light_radius(self.cutout,objectMask)
         r50 = max(0.5,np.sqrt(r50*r50-rPsf*rPsf))
-        axisRatio = utils.get_axis_ratio(self.cutout,object_mask)
-        positionAngle = utils.get_position_angle(self.cutout,object_mask) - 90
+        axisRatio = utils.get_axis_ratio(self.cutout,objectMask)
+        positionAngle = utils.get_position_angle(self.cutout,objectMask) - 90
 
         while positionAngle>90:
             positionAngle -= 180
@@ -166,27 +179,20 @@ class Galaxy(object):
         return new_xc,new_yc,new_mag,new_radius,new_sersic_index,new_axis_ratio,new_position_angle
 
 
-    def emcee_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=20,nsamples=10000):
+    def emcee_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=20,nsamples=10000,plot=False):
         nexclude = nsamples//2
-
         imsize = self.cutout.shape
-        if lensingPars is None:
-            lensMu = 1
-            majAxis_Factor = 1
-            shear_factor = 1
-            lensAngle=0
-        else:
-            lensKappa,lensGamma,lensMu,lensAngle = lensingPars
-            majAxis_Factor = 1/np.abs(1-lensKappa-lensGamma)
-            shear_factor = (1-lensKappa-lensGamma)/(1-lensKappa+lensGamma)
 
         def lnlikelihood(pars,image,sigma):
             xc,yc,mag,radius,axis_ratio,position_angle,sky = pars
-            model = simulation.generate_sersic_model(imsize,\
-                        (xc,yc,mag-2.5*np.log10(lensMu),\
-                        radius*majAxis_Factor,1.0,\
-                        axis_ratio*shear_factor,position_angle),\
-                        mag_zeropoint,exposure_time)
+            if lensingPars is None:
+                model = simulation.generate_sersic_model(imsize,\
+                            (xc,yc,mag,radius,1.0,axis_ratio,position_angle),\
+                            mag_zeropoint,exposure_time)
+            else:
+                model = simulation.generate_lensed_sersic_model(imsize,\
+                            (xc,yc,mag,radius,1.0,axis_ratio,position_angle),\
+                            lensingPars,mag_zeropoint,exposure_time)
 
             if self.psf is not None:
                 model = fftconvolve(model,self.psf,mode="same")
@@ -232,15 +238,17 @@ class Galaxy(object):
         pos[:,4][pos[:,4]<=0]=0.1
         pos[:,4][pos[:,4]>1]=1.0
 
+
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability, args=(masked_image, masked_sigma))
 
         tstart = time.time()
         sampler.run_mcmc(pos, nsamples)
         print('elapsed %.8f seconds'%(time.time()-tstart))
         print("Mean acceptance fraction: %.3f"%(np.mean(sampler.acceptance_fraction)))
-        plot_results(sampler,[r"$x_c$",r"$y_c$",r'$mag$',\
-                              r'$r_e\ [\mathrm{arcsec}]$',r"$(b/a)$",\
-                              r"$\theta_\mathrm{PA}$",r"sky"])
+        if plot is True:
+            plot_results(sampler,[r"$x_c$",r"$y_c$",r'$mag$',\
+                                  r'$r_e\ [\mathrm{arcsec}]$',r"$(b/a)$",\
+                                  r"$\theta_\mathrm{PA}$",r"sky"])
         return sampler.chain[:, nexclude:, :].reshape((-1, ndim)).T
 
 
