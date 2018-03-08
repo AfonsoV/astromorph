@@ -112,7 +112,7 @@ def moments(img,segmap):
 
     return X2,Y2,XY
 
-def get_half_ligh_radius(img,segmap,axisRatio=None,positionAngle=None):
+def get_half_light_radius(img,segmap,axisRatio=None,positionAngle=None):
     r"""Compute the half-light radius of an object given an image and a
         segmentation mask.
 
@@ -138,14 +138,22 @@ def get_half_ligh_radius(img,segmap,axisRatio=None,positionAngle=None):
 
     """
     totalFlux = np.sum(img*segmap)
+    print(totalFlux)
     xc,yc = barycenter(img,segmap)
 
     if axisRatio is None:
         axisRatio = get_axis_ratio(img,segmap)
     if positionAngle is None:
-        positionAngle = get_position_angle(img,segmap)
+        positionAngle = get_position_angle(img,segmap) - 90
 
+    # print(positionAngle)
     dmat = compute_ellipse_distmat(img,xc,yc,axisRatio,positionAngle)
+
+    # import matplotlib.pyplot as mpl
+    # fig,ax = mpl.subplots(1,2)
+    # ax[0].imshow(img)
+    # ax[1].imshow(dmat)
+    # mpl.show()
 
     dr0 = 0.1
     r0 = 0.5
@@ -153,7 +161,8 @@ def get_half_ligh_radius(img,segmap,axisRatio=None,positionAngle=None):
     while F0 < 0.5*totalFlux:
         F0 = np.sum(img[dmat<r0])
         r0=r0+dr0
-
+        if r0>max(dmat.shape):
+            break
 
     return r0
 
@@ -298,7 +307,10 @@ def axis_ratio_from_moments(x2,y2,xy):
     a2=arg1+arg2
     b2=arg1-arg2
 
-    q=np.sqrt(b2/a2)
+    if (b2/a2)<0:
+        q = 1
+    else:
+        q=np.sqrt(b2/a2)
     return q
 
 

@@ -317,7 +317,7 @@ def test_sersic():
     mpl.show()
     return
 
-def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,exposure_time,psf=None):
+def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,exposure_time,psf=None,OverSampling = 3):
     r"""
 
     Parameters
@@ -333,6 +333,11 @@ def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,expos
     --------
 
     """
+    if OverSampling <1:
+        raise ValueError
+    else:
+        OverSampling = int(OverSampling) ## Needs to be integer
+
 
     xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = modelPars
     lensKappa,lensGamma,lensMu,lensAngle = lensingPars
@@ -340,10 +345,10 @@ def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,expos
     majAxis_Factor = 1/np.abs(1-lensKappa-lensGamma)
     shear_factor = (1-lensKappa-lensGamma)/(1-lensKappa+lensGamma)
 
-    ang_rad = np.radians(lensAngle)
-    X,Y = np.meshgrid(range(shape[0]),range(shape[1]))
-    X -= xc
-    Y -= yc
+    ang_rad = np.radians(-lensAngle)
+    X,Y = np.meshgrid(np.arange(shape[0]*OverSampling),np.arange(shape[1]*OverSampling))
+    X = X.astype(np.float64) - xc*OverSampling
+    Y = Y.astype(np.float64) - yc*OverSampling
 
     rLensX=(X)*np.cos(ang_rad)-(Y)*np.sin(ang_rad)
     rLensY=(X)*np.sin(ang_rad)+(Y)*np.cos(ang_rad)
@@ -357,10 +362,15 @@ def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,expos
     rLensGalY=(rLensX)*np.sin(Pa_rad)+(rLensY)*np.cos(Pa_rad)
     dmatGal = np.sqrt(rLensGalX*rLensGalX+(1/(axis_ratio*axis_ratio))*rLensGalY*rLensGalY)
 
-    totalFlux = exposure_time * 10**( -0.4*(mag-mag_zeropoint) )
+    totalFlux = exposure_time * 10**( -0.4*(mag-2.5*np.log10(lensMu)-mag_zeropoint) )
     Sigma_e = effective_intensity(totalFlux,radius,sersic_index)
+    Profile = sersic(dmatGal,Sigma_e,OverSampling*radius,sersic_index)
 
-    return sersic(dmatGal,Sigma_e,radius,sersic_index)
+    if OverSampling != 1:
+        return Profile.reshape(shape[0],OverSampling,\
+                               shape[1],OverSampling).sum(3).sum(1)
+    else:
+        return Profile
 
 
 def generate_sersic_model(shape,modelPars,mag_zeropoint,exposure_time,psf=None):
