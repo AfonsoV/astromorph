@@ -307,7 +307,7 @@ def axis_ratio_from_moments(x2,y2,xy):
     a2=arg1+arg2
     b2=arg1-arg2
 
-    if (b2/a2)<0:
+    if (b2/a2)<0 or not np.isfinite(b2/a2):
         q = 1
     else:
         q=np.sqrt(b2/a2)
