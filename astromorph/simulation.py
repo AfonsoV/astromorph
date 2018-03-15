@@ -317,7 +317,7 @@ def test_sersic():
     mpl.show()
     return
 
-def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,exposure_time,psf=None,OverSampling = 3):
+def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,exposure_time,psf=None,OverSampling = 3,debug=False):
     r"""
 
     Parameters
@@ -333,6 +333,10 @@ def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,expos
     --------
 
     """
+
+    from .ADD import surface_brightness_profile
+
+
     if OverSampling <1:
         raise ValueError
     else:
@@ -345,17 +349,20 @@ def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,expos
     majAxis_Factor = 1/np.abs(1-lensKappa-lensGamma)
     shear_factor = (1-lensKappa-lensGamma)/(1-lensKappa+lensGamma)
 
-    ang_rad = np.radians(-lensAngle)
+    ang_rad = np.radians(lensAngle)
     X,Y = np.meshgrid(np.arange(shape[0]*OverSampling),np.arange(shape[1]*OverSampling))
-    X = X.astype(np.float64) - xc*OverSampling
-    Y = Y.astype(np.float64) - yc*OverSampling
-
+    X = (X.astype(np.float64) - xc*OverSampling)/OverSampling
+    Y = (Y.astype(np.float64) - yc*OverSampling)/OverSampling
     rLensX=(X)*np.cos(ang_rad)-(Y)*np.sin(ang_rad)
     rLensY=(X)*np.sin(ang_rad)+(Y)*np.cos(ang_rad)
-
-    rLensX /= (1-lensKappa-lensGamma)
-    rLensY /= (1-lensKappa+lensGamma)
+    if shear_factor<1:
+        rLensX *= (1-lensKappa-lensGamma)
+        rLensY *= (1-lensKappa+lensGamma)
+    else:
+        rLensX *= (1-lensKappa+lensGamma)
+        rLensY *= (1-lensKappa-lensGamma)
     dmatLens = np.sqrt(rLensX*rLensX + rLensY*rLensY)
+
 
     Pa_rad = np.radians(position_angle)
     rLensGalX=(rLensX)*np.cos(Pa_rad)-(rLensY)*np.sin(Pa_rad)
@@ -364,11 +371,27 @@ def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,expos
 
     totalFlux = exposure_time * 10**( -0.4*(mag-2.5*np.log10(lensMu)-mag_zeropoint) )
     Sigma_e = effective_intensity(totalFlux,radius,sersic_index)
-    Profile = sersic(dmatGal,Sigma_e,OverSampling*radius,sersic_index)
+    Profile = sersic(dmatGal,Sigma_e,radius,sersic_index)
+
+    if debug is True:
+        print("magnification",lensMu,"shear",shear_factor)
+        print(X.ravel())
+        print("angle",ang_rad)
+        print("magFactors - x,y:",(1-lensKappa+lensGamma),(1-lensKappa-lensGamma))
+        fig,ax = mpl.subplots()
+        R,F = surface_brightness_profile(-dmatLens,np.ones_like(dmatLens),rmax=X.shape[0])
+        ax.plot(R,F)
+
+        fig,ax = mpl.subplots(1,3,sharex=True,sharey=True,figsize=(20,8))
+        fig.subplots_adjust(wspace=0)
+        ax[0].imshow(-dmatLens)
+        ax[1].imshow(-dmatGal)
+        ax[2].imshow(Profile)
+        ax[1].set_title("bruno")
 
     if OverSampling != 1:
         return Profile.reshape(shape[0],OverSampling,\
-                               shape[1],OverSampling).sum(3).sum(1)
+                               shape[1],OverSampling).sum(3).sum(1)/(OverSampling**2)
     else:
         return Profile
 

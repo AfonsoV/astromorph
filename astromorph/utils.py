@@ -13,8 +13,6 @@ import warnings
 from skimage.morphology import watershed
 from skimage.feature import peak_local_max
 
-
-
 colorred = "\033[01;31m{0}\033[00m"
 colorgrn = "\033[1;32m{0}\033[00m"
 colorblu = "\033[1;34m{0}\033[00m"
@@ -138,7 +136,6 @@ def get_half_light_radius(img,segmap,axisRatio=None,positionAngle=None):
 
     """
     totalFlux = np.sum(img*segmap)
-    print(totalFlux)
     xc,yc = barycenter(img,segmap)
 
     if axisRatio is None:

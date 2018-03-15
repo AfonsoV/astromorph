@@ -136,7 +136,7 @@ class Galaxy(object):
             objectMask = self.default_mask(radius/pixscale)
 
         xc,yc=utils.barycenter(self.cutout,objectMask)
-        mag = -2.5*np.log10(np.sum(self.cutout*objectMask)/exposure_time)+mag_zeropoint
+        mag = -2.5*np.log10(np.nansum(self.cutout*objectMask)/exposure_time)+mag_zeropoint
         # r100 = max(0.5,np.sqrt(self.cutout[object_mask==1].size/np.pi - 2.5*2.5))
         r50 = utils.get_half_light_radius(self.cutout,objectMask)
         r50 = max(0.5,np.sqrt(r50*r50-rPsf*rPsf))
@@ -205,8 +205,9 @@ class Galaxy(object):
         def prior(pars):
             x,y,m,r,q,t,s=pars
         ##    ,n,q,t=pars
-            if  (0<x<self.cutout.shape[1]) and\
-                (0<y<self.cutout.shape[0]) and\
+            N,M = self.cutout.shape
+            if  (N/4<x<3*N/4) and\
+                (M/4<y<3*M/4) and\
                 (21<m<35) and\
                 (0.1<r<50) and\
                 (0.1<q<1) and\
