@@ -55,10 +55,19 @@ class Galaxy(object):
         else:
             print("Galaxy cutout outside image region")
 
-    def get_image_box_coordinates(self):
+    def get_bounding_box_coordinates(self):
         assert (self.bounding_box  is not None),"A bounding box must be assigned to the galaxy"
         header = self.imgheader
         x0,x1,y0,y1=self.bounding_box
+        wcs=pywcs.WCS(header)
+        pixCoords=wcs.wcs_pix2world([[x0,y0],[x1,y1]],1)
+        pixLow = pixCoords[0]
+        pixHig = pixCoords[1]
+        return (pixLow[0],pixHig[0],pixLow[1],pixHig[1])
+
+    def get_image_coordinates(self):
+        header = self.imgheader
+        x0,x1,y0,y1=0,self.imgdata.shape[1],0,self.imgdata.shape[0]
         wcs=pywcs.WCS(header)
         pixCoords=wcs.wcs_pix2world([[x0,y0],[x1,y1]],1)
         pixLow = pixCoords[0]

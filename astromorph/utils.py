@@ -1800,7 +1800,13 @@ def get_bounding_box(header,coords,size,pixelscale):
     --------
 
     """
-    centerCoords = get_center_coords_hdr(header,coords.ra.value[0],coords.dec.value[0])
+    try:
+        centerCoords = get_center_coords_hdr(header,coords.ra.value[0],\
+                                                    coords.dec.value[0])
+    except TypeError:
+        centerCoords = get_center_coords_hdr(header,coords.ra.value,\
+                                                   coords.dec.value)
+
     hsize = int(size/pixelscale)//2
 
     xl = int(centerCoords[0]-hsize)
