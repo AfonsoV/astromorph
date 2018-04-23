@@ -24,10 +24,13 @@ def get_fixpars_default():
     return {'x':1,'y':1,'m':1,'re':1,'n':1,'q':1,'pa':1,'sky':1}
 
 def write_object(model,x,y,m,re,n,ba,pa,num,fixpars=None):
-    r"""
+    r""" Returns a string object containing a general description for a galaxy
+    profile model in GALFIT.
 
     Parameters
     ----------
+    model : str
+        
 
     Returns
     -------

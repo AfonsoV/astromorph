@@ -12,6 +12,52 @@ from . import galfit
 import time
 import emcee
 
+
+
+### MCMC
+def lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
+    xc,yc,mag,radius,axis_ratio,position_angle,sky = pars
+    if lensingPars is None:
+        model = simulation.generate_sersic_model(image.shape,\
+                    (xc,yc,mag,radius,1.0,axis_ratio,position_angle),\
+                    mag_zeropoint,exposure_time)
+    else:
+        model = simulation.generate_lensed_sersic_model(image.shape,\
+                    (xc,yc,mag,radius,1.0,axis_ratio,position_angle),\
+                    lensingPars,mag_zeropoint,exposure_time)
+
+    if psf is not None:
+        model = fftconvolve(model,psf,mode="same")
+        # model = convolve_fft(model,self.psf)
+    model+=sky
+
+    return -0.5*np.ma.sum( (image-model)*(image-model)/(sigma*sigma) + np.ma.log(2*np.pi*sigma*sigma) )
+
+def prior(pars,shape):
+    x,y,m,r,q,t,s=pars
+##    ,n,q,t=pars
+    N,M = shape
+    if  (N/4<x<3*N/4) and\
+        (M/4<y<3*M/4) and\
+        (0<m<35) and\
+        (0.1<r<50) and\
+        (0.1<q<1) and\
+        (-90<t<90):
+        return 0.0
+    return -np.inf
+
+def lnprobability(pars,image,sigma,mag_zeropoint,exposure_time,psf=None,lensingPars=None):
+    pr = prior(pars,image.shape)
+    if not np.isfinite(pr):
+        return -np.inf
+    LL = pr + lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars)
+    if np.isfinite(LL):
+        return LL
+    else:
+        return -np.inf
+
+
+
 class Galaxy(object):
 
     def __init__(self,imgname=None,imgdata=None,coords=None):
@@ -189,57 +235,15 @@ class Galaxy(object):
         return new_xc,new_yc,new_mag,new_radius,new_sersic_index,new_axis_ratio,new_position_angle
 
 
-    def emcee_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=20,nsamples=10000,plot=False):
+
+    def emcee_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=20,nsamples=10000,plot=False,threads=1,ntemps=None):
         nexclude = nsamples//2
-        imsize = self.cutout.shape
-
-        def lnlikelihood(pars,image,sigma):
-            xc,yc,mag,radius,axis_ratio,position_angle,sky = pars
-            if lensingPars is None:
-                model = simulation.generate_sersic_model(imsize,\
-                            (xc,yc,mag,radius,1.0,axis_ratio,position_angle),\
-                            mag_zeropoint,exposure_time)
-            else:
-                model = simulation.generate_lensed_sersic_model(imsize,\
-                            (xc,yc,mag,radius,1.0,axis_ratio,position_angle),\
-                            lensingPars,mag_zeropoint,exposure_time)
-
-            if self.psf is not None:
-                model = fftconvolve(model,self.psf,mode="same")
-                # model = convolve_fft(model,self.psf)
-            model+=sky
-
-            return -0.5*np.ma.sum( (image-model)*(image-model)/(sigma*sigma) + np.ma.log(2*np.pi*sigma*sigma) )
-
-        def prior(pars):
-            x,y,m,r,q,t,s=pars
-        ##    ,n,q,t=pars
-            N,M = self.cutout.shape
-            if  (N/4<x<3*N/4) and\
-                (M/4<y<3*M/4) and\
-                (21<m<35) and\
-                (0.1<r<50) and\
-                (0.1<q<1) and\
-                (-90<t<90):
-                return 0.0
-            return -np.inf
-
-        def lnprobability(pars,image,sigma):
-            pr = prior(pars)
-            if not np.isfinite(pr):
-                return -np.inf
-            LL = pr + lnlikelihood(pars,image,sigma)
-            if np.isfinite(LL):
-                return LL
-            else:
-                return -np.inf
-
 
         masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
         masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
 
         ndim, nwalkers = len(initPars), nchain
-        sigmaPars = [2.5,2.5,0.5,5.0,0.075,5.0,np.abs(0.05*initPars[-1])]
+        sigmaPars = [2.5,2.5,0.5,5.0,0.075,5.0,np.abs(0.25*initPars[-1])]
         pos = np.array([np.random.normal(initPars,sigmaPars) for i in range(nwalkers)])
         pos[:,0][pos[:,0]<0]=1
         pos[:,0][pos[:,0]>self.cutout.shape[0]]=self.cutout.shape[0]-1
@@ -249,18 +253,34 @@ class Galaxy(object):
         pos[:,4][pos[:,4]<=0]=0.1
         pos[:,4][pos[:,4]>1]=1.0
 
-
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability, args=(masked_image, masked_sigma))
-
         tstart = time.time()
-        sampler.run_mcmc(pos, nsamples)
+        if ntemps is None:
+            sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability,\
+                        args=(masked_image, masked_sigma,mag_zeropoint,\
+                              exposure_time, self.psf,lensingPars),\
+                        threads=threads,a=2.4)
+            sampler.run_mcmc(pos, nsamples)
+        else:
+            sampler = emcee.PTSampler(ntemps,nwalkers, ndim, lnprobability,prior,\
+                    loglargs=(masked_image, masked_sigma,mag_zeropoint,\
+                              exposure_time),\
+                    logpargs=(masked_image.shape,),threads=threads)
+            sampler.run_mcmc([pos]*ntemps, nsamples)
+
+
         print('elapsed %.8f seconds'%(time.time()-tstart))
         print("Mean acceptance fraction: %.3f"%(np.mean(sampler.acceptance_fraction)))
         if plot is True:
             plot_results(sampler,[r"$x_c$",r"$y_c$",r'$mag$',\
                                   r'$r_e\ [\mathrm{arcsec}]$',r"$(b/a)$",\
-                                  r"$\theta_\mathrm{PA}$",r"sky"])
-        return sampler.chain[:, nexclude:, :].reshape((-1, ndim)).T
+                                  r"$\theta_\mathrm{PA}$",r"sky"],ntemps=ntemps)
+
+        if  ntemps is not None:
+            samples = sampler.chain[:,:, nexclude:, :].reshape((-1, ndim))
+        else:
+            samples = sampler.chain[:, nexclude:, :].reshape((-1, ndim))
+
+        return samples.T
 
 
     def montecarlo_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars,nRun = 10,verbose=False):
@@ -335,11 +355,57 @@ class Galaxy(object):
         return modelChain
 
 
+##def plot_results(sampler,pars):
+##    assert len(pars)==sampler.dim
+##    ntemps = sampler.chain.shape[0]
+##    nwalkers = sampler.chain.shape[1]
+##    NP=len(pars)
+##
+##    fig=mpl.figure(figsize=(25,NP*4))
+##
+##    gs = gridspec.GridSpec(NP, 2,width_ratios=[5,1])
+##
+##    main_axes = [mpl.subplot(gs[k]) for k in range(0,2*NP,2)]
+##    hist_axes = [mpl.subplot(gs[k]) for k in range(1,2*NP,2)]
+##
+##    ax=main_axes+hist_axes
+##    mpl.subplots_adjust(hspace=0.0,wspace=0.0)
+##
+##    for n in range(NP):
+##        for j in range(ntemps):
+##            for i in range(nwalkers):
+##                ax[n].plot(sampler.chain[j,i,:,n],color=cm.rainbow_r(float(j)/ntemps),alpha=0.35)
+##                ax[n].set_ylabel(pars[n])
+##
+##            ax[NP+n].hist(sampler.flatchain[j,:,n],bins=50,orientation='horizontal',color=cm.rainbow_r(float(j)/ntemps),histtype='stepfilled',alpha=0.35)
+##
+##        if n<(NP-1):
+##            ax[n].tick_params(labelbottom='off')
+##            ax[NP+n].tick_params(labelbottom='off')
+##        ax[NP+n].tick_params(labelleft='off')
+##
+##    ax[NP-1].set_xlabel(r'$N_\mathrm{step}$')
+##    ax[-1].set_xlabel(r'$N_\mathrm{sol}$')
+##
+##    return fig,ax
 
-def plot_results(sampler,pars):
+
+
+def plot_results(sampler,pars,ntemps=None):
+    ColorsTemps = ["black","DodgerBlue","Crimson","ForestGreen",\
+                   "DarkOrange","Indigo","Goldenrod","Magenta","SteelBlue",\
+                   "LimeGreen","Coral","Brown","Violet"]
     import matplotlib.gridspec as gridspec
     assert len(pars)==sampler.dim
-    nwalkers = sampler.chain.shape[0]
+    if ntemps is None:
+        nwalkers = sampler.chain.shape[0]
+        ntemps = 1
+        chain = sampler.chain[np.newaxis,...]
+        flatChain = sampler.flatchain[np.newaxis,...]
+    else:
+        nwalkers = sampler.chain.shape[1]
+        chain = sampler.chain
+        flatChain = sampler.flatchain
     NP=len(pars)
 
     fig=mpl.figure(figsize=(25,NP*4))
@@ -349,11 +415,11 @@ def plot_results(sampler,pars):
     mpl.subplots_adjust(hspace=0.0,wspace=0.0)
 
     for n in range(NP):
-        for i in range(nwalkers):
-            ax[n].plot(sampler.chain[i,:,n],color='k',alpha=0.35)
-            ax[n].set_ylabel(pars[n])
-
-        ax[NP+n].hist(sampler.flatchain[:,n],bins=50,orientation='horizontal',color='silver',histtype='stepfilled')
+        for j in range(ntemps):
+            for i in range(nwalkers):
+                ax[n].plot(chain[j,i,:,n],alpha=0.35,color=ColorsTemps[j])
+                ax[n].set_ylabel(pars[n])
+            ax[NP+n].hist(flatChain[j,:,n],bins=50,orientation='horizontal',color='silver',histtype='stepfilled')
         if n<(NP-1):
             ax[n].tick_params(labelbottom='off')
             ax[NP+n].tick_params(labelbottom='off')
