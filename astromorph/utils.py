@@ -743,7 +743,7 @@ def select_object_map_connected(xc,yc,image,segmap,pixscale,radius=0.5):
     return Regions
 
 
-def gen_segmap_watershed(img,thresholds=[100,50,25,12,5,2],mSigma=1,Amin=5,k_sky=3):
+def gen_segmap_watershed(img,thresholds=[100,50,25,12,5,2],mSigma=1,Amin=5,k_sky=3,debug=False):
     segmap = np.zeros_like(img)
     for t in thresholds:
         sm = gen_segmap_tresh(img,None,None,None,thresh=t,all_detection=True,Amin=Amin,k_sky=k_sky)
@@ -751,11 +751,14 @@ def gen_segmap_watershed(img,thresholds=[100,50,25,12,5,2],mSigma=1,Amin=5,k_sky
         segmap += sm
 
     segmap = sci_nd.gaussian_filter(segmap,sigma=mSigma)
-    peaksImage = peak_local_max(segmap, indices=False, footprint=np.ones((3, 3)),
-                        labels=sm)
+    peaksImage = peak_local_max(segmap, indices=False, footprint=np.ones((5, 5)),
+                        labels=sm,threshold_rel=0.1,exclude_border=False)
     markers = sci_nd.label(peaksImage)[0]
     labels = watershed(-segmap, markers, mask=sm)
-    return labels
+    if debug:
+        return segmap,peaksImage,labels
+    else:
+        return labels
 
 def gen_segmap_tresh(img,xc,yc,pixscale,radius =0.5,thresh=5.0,Amin=5,k_sky=3,all_detection=False,structure=None):
     r""" Creates a segmentation mask for the given image by flagging all pixels

@@ -250,6 +250,7 @@ class Galaxy(object):
         pos[:,1][pos[:,1]<0]=1
         pos[:,1][pos[:,1]>self.cutout.shape[1]]=self.cutout.shape[1]-1
         pos[:,3][pos[:,3]<0]=1
+        # pos[:,3][pos[:,3]>5]=5
         pos[:,4][pos[:,4]<=0]=0.1
         pos[:,4][pos[:,4]>1]=1.0
 
