@@ -714,13 +714,13 @@ def select_object_map_connected(xc,yc,image,segmap,pixscale,radius=0.5):
     --------
 
     """
-    new_map = select_object_map(xc,yc,segmap,pixscale,radius)
-    Regions,Nregions = sci_nd.label(new_map)
+    Regions,Nregions = sci_nd.label(segmap)
 #    A= np.array([np.size(Regions[Regions==n]) for n in range(1,Nregions+1)])
     try:
         central_region = image.copy()
-        central_region[Dmat>(radius/pixscale)*(radius/pixscale)]=0.0
-        central_region*=-new_map
+        Dmat,d=distance_matrix(xc,yc,segmap)
+        central_region[Dmat>(radius/pixscale)]=0.0
+        central_region*=segmap
         fmax = np.where(central_region == np.amax(central_region))
         n = Regions[fmax]
 ##        F= np.array([np.amax(image[Regions==n]) for n in range(1,Nregions+1)])
@@ -728,22 +728,24 @@ def select_object_map_connected(xc,yc,image,segmap,pixscale,radius=0.5):
         Regions[Regions!=n]=0
         Regions[Regions>0]=1
 
-    except ValueError:
+    except ValueError as err:
         ## IN CASE OF NON-DETECTIONS returns empty segmentation map
+        print(err)
         pass
 
-#    nFig,nAx = mpl.subplots(1,3)
-#    nAx[0].imshow(segmap,cmap='rainbow')
-#    nAx[0].plot([xc],[yc],'wx',markersize=20,mew=2)
-#    nAx[1].imshow(new_map,cmap='jet')
-#    nAx[1].plot([xc],[yc],'wx',markersize=20,mew=2)
-#    nAx[2].imshow(Regions,cmap='YlGnBu_r')
-#    nAx[2].plot([xc],[yc],'rx',markersize=20,mew=2)
-#    mpl.show()
+    # import matplotlib.pyplot as mpl
+    # nFig,nAx = mpl.subplots(1,3)
+    # nAx[0].imshow(segmap,cmap='rainbow')
+    # nAx[0].plot([xc],[yc],'wx',markersize=20,mew=2)
+    # nAx[1].imshow(central_region,cmap='rainbow')
+    # nAx[1].plot([xc],[yc],'wx',markersize=20,mew=2)
+    # nAx[2].imshow(Regions,cmap='YlGnBu_r')
+    # nAx[2].plot([xc],[yc],'rx',markersize=20,mew=2)
+    # mpl.show()
     return Regions
 
 
-def gen_segmap_watershed(img,thresholds=[100,50,25,12,5,2],mSigma=1,Amin=5,k_sky=3,debug=False):
+def gen_segmap_watershed(img,thresholds=[100,50,25,15,12,10,7,5,3,2],mSigma=0.75,Amin=5,k_sky=3,debug=False):
     segmap = np.zeros_like(img)
     for t in thresholds:
         sm = gen_segmap_tresh(img,None,None,None,thresh=t,all_detection=True,Amin=Amin,k_sky=k_sky)
@@ -751,8 +753,10 @@ def gen_segmap_watershed(img,thresholds=[100,50,25,12,5,2],mSigma=1,Amin=5,k_sky
         segmap += sm
 
     segmap = sci_nd.gaussian_filter(segmap,sigma=mSigma)
-    peaksImage = peak_local_max(segmap, indices=False, footprint=np.ones((5, 5)),
-                        labels=sm,threshold_rel=0.1,exclude_border=False)
+
+    ss = np.ceil(np.sqrt(Amin)).astype(np.int8)
+    peaksImage = peak_local_max(segmap, indices=False, footprint=np.ones((ss, ss)),
+                        labels=sm,threshold_rel=0.01,exclude_border=False)
     markers = sci_nd.label(peaksImage)[0]
     labels = watershed(-segmap, markers, mask=sm)
     if debug:

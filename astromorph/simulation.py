@@ -334,8 +334,6 @@ def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,expos
 
     """
 
-    from .ADD import surface_brightness_profile
-
 
     if OverSampling <1:
         raise ValueError
@@ -374,6 +372,7 @@ def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,expos
     Profile = sersic(dmatGal,Sigma_e,radius,sersic_index)
 
     if debug is True:
+        from .ADD import surface_brightness_profile
         print("magnification",lensMu,"shear",shear_factor)
         print(X.ravel())
         print("angle",ang_rad)

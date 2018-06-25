@@ -16,7 +16,7 @@ import emcee
 
 ### MCMC
 def lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
-    xc,yc,mag,radius,axis_ratio,position_angle,sky = pars
+    xc,yc,mag,radius,axis_ratio,position_angle,sky,dx_sky,dy_sky = pars
     if lensingPars is None:
         model = simulation.generate_sersic_model(image.shape,\
                     (xc,yc,mag,radius,1.0,axis_ratio,position_angle),\
@@ -29,20 +29,22 @@ def lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
     if psf is not None:
         model = fftconvolve(model,psf,mode="same")
         # model = convolve_fft(model,self.psf)
-    model+=sky
+
+    N,M = model.shape
+    x,y = np.meshgrid(range(N),range(M))
+    model+=sky + dx_sky*(x-N/2) +dy_sky*(y-M/2)
 
     return -0.5*np.ma.sum( (image-model)*(image-model)/(sigma*sigma) + np.ma.log(2*np.pi*sigma*sigma) )
 
 def prior(pars,shape):
-    x,y,m,r,q,t,s=pars
 ##    ,n,q,t=pars
     N,M = shape
-    if  (N/4<x<3*N/4) and\
-        (M/4<y<3*M/4) and\
-        (0<m<35) and\
-        (0.1<r<50) and\
-        (0.1<q<1) and\
-        (-90<t<90):
+    if  (N/4<pars[0]<3*N/4) and\
+        (M/4<pars[1]<3*M/4) and\
+        (0<pars[2]<35) and\
+        (0.1<pars[3]<50) and\
+        (0.1<pars[4]<1) and\
+        (-90<pars[5]<90):
         return 0.0
     return -np.inf
 
@@ -243,7 +245,11 @@ class Galaxy(object):
         masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
 
         ndim, nwalkers = len(initPars), nchain
-        sigmaPars = [2.5,2.5,0.5,5.0,0.075,5.0,np.abs(0.25*initPars[-1])]
+        sigmaPars = [2.5,2.5,0.5,5.0,0.075,5.0,np.abs(0.25*initPars[6])]
+        if len(sigmaPars) != len(initPars):
+            for i in range(len(sigmaPars),len(initPars)):
+                sigmaPars.append(1e-3)
+
         pos = np.array([np.random.normal(initPars,sigmaPars) for i in range(nwalkers)])
         pos[:,0][pos[:,0]<0]=1
         pos[:,0][pos[:,0]>self.cutout.shape[0]]=self.cutout.shape[0]-1
@@ -274,7 +280,8 @@ class Galaxy(object):
         if plot is True:
             plot_results(sampler,[r"$x_c$",r"$y_c$",r'$mag$',\
                                   r'$r_e\ [\mathrm{arcsec}]$',r"$(b/a)$",\
-                                  r"$\theta_\mathrm{PA}$",r"sky"],ntemps=ntemps)
+                                  r"$\theta_\mathrm{PA}$",r"sky","dx","dy"],\
+                                  ntemps=ntemps)
 
         if  ntemps is not None:
             samples = sampler.chain[:,:, nexclude:, :].reshape((-1, ndim))
