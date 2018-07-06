@@ -374,19 +374,19 @@ def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,expos
     if debug is True:
         from .ADD import surface_brightness_profile
         print("magnification",lensMu,"shear",shear_factor)
-        print(X.ravel())
+        # print(X.ravel())
         print("angle",ang_rad)
-        print("magFactors - x,y:",(1-lensKappa+lensGamma),(1-lensKappa-lensGamma))
-        fig,ax = mpl.subplots()
-        R,F = surface_brightness_profile(-dmatLens,np.ones_like(dmatLens),rmax=X.shape[0])
-        ax.plot(R,F)
-
-        fig,ax = mpl.subplots(1,3,sharex=True,sharey=True,figsize=(20,8))
-        fig.subplots_adjust(wspace=0)
-        ax[0].imshow(-dmatLens)
-        ax[1].imshow(-dmatGal)
-        ax[2].imshow(Profile)
-        ax[1].set_title("bruno")
+        print("magFactors - x,y:",(1-lensKappa-lensGamma),(1-lensKappa+lensGamma))
+        # fig,ax = mpl.subplots()
+        # R,F = surface_brightness_profile(-dmatLens,np.ones_like(dmatLens),rmax=X.shape[0])
+        # ax.plot(R,F)
+        #
+        # fig,ax = mpl.subplots(1,3,sharex=True,sharey=True,figsize=(20,8))
+        # fig.subplots_adjust(wspace=0)
+        # ax[0].imshow(-dmatLens)
+        # ax[1].imshow(-dmatGal)
+        # ax[2].imshow(Profile)
+        # ax[1].set_title("bruno")
 
     if OverSampling != 1:
         return Profile.reshape(shape[0],OverSampling,\

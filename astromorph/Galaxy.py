@@ -16,7 +16,8 @@ import emcee
 
 ### MCMC
 def lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
-    xc,yc,mag,radius,axis_ratio,position_angle,sky,dx_sky,dy_sky = pars
+    # xc,yc,mag,radius,axis_ratio,position_angle,sky,dx_sky,dy_sky = pars
+    xc,yc,mag,radius,axis_ratio,position_angle,sky = pars
     if lensingPars is None:
         model = simulation.generate_sersic_model(image.shape,\
                     (xc,yc,mag,radius,1.0,axis_ratio,position_angle),\
@@ -32,7 +33,7 @@ def lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
 
     N,M = model.shape
     x,y = np.meshgrid(range(N),range(M))
-    model+=sky + dx_sky*(x-N/2) +dy_sky*(y-M/2)
+    model += sky ## + dx_sky*(x-N/2) +dy_sky*(y-M/2)
 
     return -0.5*np.ma.sum( (image-model)*(image-model)/(sigma*sigma) + np.ma.log(2*np.pi*sigma*sigma) )
 
@@ -41,10 +42,10 @@ def prior(pars,shape):
     N,M = shape
     if  (N/4<pars[0]<3*N/4) and\
         (M/4<pars[1]<3*M/4) and\
-        (0<pars[2]<35) and\
-        (0.1<pars[3]<50) and\
-        (0.1<pars[4]<1) and\
-        (-90<pars[5]<90):
+        (0<pars[2]<=35) and\
+        (0.1<=pars[3]<=50) and\
+        (0.1<=pars[4]<=1) and\
+        (-90<=pars[5]<=90):
         return 0.0
     return -np.inf
 
@@ -81,6 +82,7 @@ class Galaxy(object):
         self.psfname = "none"
         self.mask = None
         self.sigmaImage = None
+        self.objectMask = None
 
     def set_coords(self,coords):
         self.coords=coords
@@ -143,6 +145,14 @@ class Galaxy(object):
         self.set_segmentation_mask(segmap - objmap)
         return self.mask
 
+    def set_object_mask(self,mask,radius=15):
+        if mask[mask>0].size==0:
+            print("Warning, object mask is empty. Setting default mask.")
+            self.objectMask = self.default_mask(radius)
+        else:
+            self.objectMask = mask
+        return None
+
     def create_object_mask(self,pixscale,radius,**kwargs):
         N,M=self.cutout.shape
         xc=N/2
@@ -164,8 +174,8 @@ class Galaxy(object):
             self.psf = np.pad(self.psf,((0,1),(0,1)),mode="edge")
             self.psf = snd.shift(self.psf,+0.5)
 
-        if resize is not None:
-            self.psf = self.psf[50:-50,50:-50]
+        # if resize is not None:
+        #     self.psf = self.psf[50:-50,50:-50]
         return None
 
     def set_sigma(self,sigma):
@@ -188,17 +198,26 @@ class Galaxy(object):
             detection_image = self.cutout*(1-self.mask)
         else:
             detection_image = self.cutout
-        objectMask = self.create_object_mask(pixscale,radius,**kwargs)
-        if objectMask[objectMask>0].size ==0:
-            objectMask = self.default_mask(radius/pixscale)
 
-        xc,yc=utils.barycenter(self.cutout,objectMask)
-        mag = -2.5*np.log10(np.nansum(self.cutout*objectMask)/exposure_time)+mag_zeropoint
+        if self.objectMask is None:
+            self.objectMask = self.create_object_mask(pixscale,radius,**kwargs)
+            if self.objectMask[self.objectMask>0].size ==0:
+                self.objectMask = self.default_mask(radius/pixscale)
+
+        xc,yc=utils.barycenter(self.cutout,self.objectMask)
+
+        if np.nansum(self.cutout*self.objectMask)<0:
+            mag = 28
+        else:
+            mag = -2.5*np.log10(np.nansum(self.cutout*self.objectMask)/exposure_time)+mag_zeropoint
         # r100 = max(0.5,np.sqrt(self.cutout[object_mask==1].size/np.pi - 2.5*2.5))
-        r50 = utils.get_half_light_radius(self.cutout,objectMask)
-        r50 = max(0.5,np.sqrt(r50*r50-rPsf*rPsf))
-        axisRatio = utils.get_axis_ratio(self.cutout,objectMask)
-        positionAngle = utils.get_position_angle(self.cutout,objectMask) - 90
+        r50 = utils.get_half_light_radius(self.cutout,self.objectMask)
+        if r50<rPsf:
+            r50 = 0.5
+        else:
+            r50 = np.sqrt(r50*r50-rPsf*rPsf)
+        axisRatio = utils.get_axis_ratio(self.cutout,self.objectMask)
+        positionAngle = utils.get_position_angle(self.cutout,self.objectMask) - 90
 
         while positionAngle>90:
             positionAngle -= 180
@@ -245,22 +264,27 @@ class Galaxy(object):
         masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
 
         ndim, nwalkers = len(initPars), nchain
-        sigmaPars = [2.5,2.5,0.5,5.0,0.075,5.0,np.abs(0.25*initPars[6])]
+        sigmaPars = [1.5,1.5,0.5,5.0,0.075,5.0,np.abs(0.25*initPars[6])]
         if len(sigmaPars) != len(initPars):
             for i in range(len(sigmaPars),len(initPars)):
                 sigmaPars.append(1e-3)
 
         pos = np.array([np.random.normal(initPars,sigmaPars) for i in range(nwalkers)])
+
+        ## Standardize random starting points to be within accepted ranges
         pos[:,0][pos[:,0]<0]=1
         pos[:,0][pos[:,0]>self.cutout.shape[0]]=self.cutout.shape[0]-1
         pos[:,1][pos[:,1]<0]=1
         pos[:,1][pos[:,1]>self.cutout.shape[1]]=self.cutout.shape[1]-1
-        pos[:,3][pos[:,3]<0]=1
-        # pos[:,3][pos[:,3]>5]=5
-        pos[:,4][pos[:,4]<=0]=0.1
+        pos[:,3][pos[:,3]<0.5]=0.5
+        pos[:,3][pos[:,3]>50]=50
+        pos[:,4][pos[:,4]<0.1]=0.1
         pos[:,4][pos[:,4]>1]=1.0
+        pos[:,5][pos[:,5]>90]-=180
+        pos[:,5][pos[:,5]<-90]+=180
 
         tstart = time.time()
+
         if ntemps is None:
             sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability,\
                         args=(masked_image, masked_sigma,mag_zeropoint,\
@@ -275,12 +299,12 @@ class Galaxy(object):
             sampler.run_mcmc([pos]*ntemps, nsamples)
 
 
-        print('elapsed %.8f seconds'%(time.time()-tstart))
-        print("Mean acceptance fraction: %.3f"%(np.mean(sampler.acceptance_fraction)))
+        print('\telapsed %.8f seconds'%(time.time()-tstart))
+        print("\tMean acceptance fraction: %.3f"%(np.mean(sampler.acceptance_fraction)))
         if plot is True:
             plot_results(sampler,[r"$x_c$",r"$y_c$",r'$mag$',\
                                   r'$r_e\ [\mathrm{arcsec}]$',r"$(b/a)$",\
-                                  r"$\theta_\mathrm{PA}$",r"sky","dx","dy"],\
+                                  r"$\theta_\mathrm{PA}$",r"sky"],\
                                   ntemps=ntemps)
 
         if  ntemps is not None:
