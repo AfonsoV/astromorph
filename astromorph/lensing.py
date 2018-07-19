@@ -22,8 +22,38 @@ class ModelError(Error):
 
 
 class LensingModel(object):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
 
     def __init__(self,redshift_lens,pixelScale):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         self.gamma = None
         self.kappa = None
         self.xdeflect = None
@@ -39,6 +69,21 @@ class LensingModel(object):
         self.pixelScale = pixelScale
 
     def set_lensing_data(self,filename=None,gamma=None,kappa=None,xdeflect=None,ydeflect=None,extent=None):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         if filename is not None:
             self.modelname = filename
             self.header = pyfits.getheader("%s_gamma.fits"%(filename))
@@ -57,6 +102,21 @@ class LensingModel(object):
             raise ModelError("Either a filename is given or all 4 components (gamma,kappa,xy-deflection) must be given.")
 
     def set_bounding_box(self,size,coords,pixelScale=None):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         if pixelScale is None:
             pixelScale = self.pixelScale
         if self.modelname is not None:
@@ -77,6 +137,21 @@ class LensingModel(object):
             raise ModelError("Neither a file nor an extent set is defined for this model to get coordinates from.")
 
     def get_image_box_coordinates(self):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         header = self.header
         x0,x1,y0,y1=0,self.gamma.shape[1],0,self.gamma.shape[0]
         wcs=pywcs.WCS(header)
@@ -88,6 +163,21 @@ class LensingModel(object):
 
 
     def set_model_at_z(self,redshift,**kwargs):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         dlens = angular_distance(self.lens_redshift)
         dsource = angular_distance(redshift)
         dlens_source = dsource - (1+self.lens_redshift)/(1+redshift)*dlens
@@ -101,6 +191,21 @@ class LensingModel(object):
         return None
 
     def compute_shear_angle(self,redshift):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         if self.xdeflect_at_z is None or self.ydeflect_at_z is None:
             self.set_model_at_z(redshift)
         dxd_dy,dxd_dx = np.gradient(self.xdeflect_at_z)
@@ -109,7 +214,21 @@ class LensingModel(object):
         return self.shear_angle
 
     def get_magnification(self,redshift,minMag=5e-2):
+        r"""
 
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         if self.kappa_at_z is None or self.gamma_at_z is None:
             self.set_model_at_z(redshift)
 
@@ -119,6 +238,21 @@ class LensingModel(object):
         return self.mu_at_z
 
     def draw_cutout(self,size,coords,component="gamma",eixo=None,**kwargs):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         if eixo is None:
             fig,ax = mpl.subplots()
         else:
@@ -131,18 +265,33 @@ class LensingModel(object):
             data = self.kappa
         elif component == "magnification":
             data = self.mu
-        # elif component == "x-deflect":
-        #     data = self.xdeflect
-        # elif component == "y-deflect":
-        #     data = self.ydeflect
+        elif component == "x-deflect":
+            data = self.xdeflect
+        elif component == "y-deflect":
+            data = self.ydeflect
         else:
-            raise ValueError("Invalid value for component. It should be one of: kappa, gamma, x-defelct or y-deflect")
+            raise ValueError("Invalid value for component. It should be one of: kappa, gamma,magnification x-defelct or y-deflect")
         putils.show_image(ax,data[yl:yu,xl:xu],scale="linear",\
                           extent=(-size/2,size/2,-size/2,size/2),**kwargs)
         putils.draw_cross(ax,0,0,gap=1.0,size=1.5,color="white",lw=3)
         return None
 
     def get_lensing_parameters_at_position(self,coords,window=5):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         xl,xu,yl,yu = self.set_bounding_box(window,coords,pixelScale=1.0)
 
         medKappa = np.median(self.kappa_at_z[yl:yu,xl:xu])

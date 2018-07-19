@@ -746,6 +746,21 @@ def select_object_map_connected(xc,yc,image,segmap,pixscale,radius=0.5):
 
 
 def gen_segmap_watershed(img,thresholds=[100,50,25,15,12,10,7,5,3,2],mSigma=0.75,Amin=5,k_sky=3,debug=False):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
     segmap = np.zeros_like(img)
     for t in thresholds:
         sm = gen_segmap_tresh(img,None,None,None,thresh=t,all_detection=True,Amin=Amin,k_sky=k_sky)

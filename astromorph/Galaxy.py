@@ -16,6 +16,21 @@ import emcee
 
 ### MCMC
 def lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     # xc,yc,mag,radius,axis_ratio,position_angle,sky,dx_sky,dy_sky = pars
     xc,yc,mag,radius,axis_ratio,position_angle,sky = pars
     if lensingPars is None:
@@ -38,18 +53,47 @@ def lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
     return -0.5*np.ma.sum( (image-model)*(image-model)/(sigma*sigma) + np.ma.log(2*np.pi*sigma*sigma) )
 
 def prior(pars,shape):
-##    ,n,q,t=pars
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     N,M = shape
     if  (N/4<pars[0]<3*N/4) and\
         (M/4<pars[1]<3*M/4) and\
         (0<pars[2]<=35) and\
-        (0.1<=pars[3]<=50) and\
+        (1e-3<=pars[3]<=50) and\
         (0.1<=pars[4]<=1) and\
         (-90<=pars[5]<=90):
         return 0.0
     return -np.inf
 
 def lnprobability(pars,image,sigma,mag_zeropoint,exposure_time,psf=None,lensingPars=None):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
     pr = prior(pars,image.shape)
     if not np.isfinite(pr):
         return -np.inf
@@ -62,9 +106,39 @@ def lnprobability(pars,image,sigma,mag_zeropoint,exposure_time,psf=None,lensingP
 
 
 class Galaxy(object):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+
 
     def __init__(self,imgname=None,imgdata=None,coords=None):
+        r"""
 
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         assert (imgname is not None) or (imgdata is not None),\
                 "One of imgname/imgdata must be provided."
 
@@ -85,10 +159,40 @@ class Galaxy(object):
         self.objectMask = None
 
     def set_coords(self,coords):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         self.coords=coords
         return None
 
     def draw_cutout(self,size,pixelscale,eixo=None,**kwargs):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         if self.cutout is None:
             data = utils.get_cutout(self.original_name,self.coords,size,pixelscale)
         else:
@@ -106,6 +210,21 @@ class Galaxy(object):
             print("Galaxy cutout outside image region")
 
     def get_bounding_box_coordinates(self):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         assert (self.bounding_box  is not None),"A bounding box must be assigned to the galaxy"
         header = self.imgheader
         x0,x1,y0,y1=self.bounding_box
@@ -116,6 +235,21 @@ class Galaxy(object):
         return (pixLow[0],pixHig[0],pixLow[1],pixHig[1])
 
     def get_image_coordinates(self):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         header = self.imgheader
         x0,x1,y0,y1=0,self.imgdata.shape[1],0,self.imgdata.shape[0]
         wcs=pywcs.WCS(header)
@@ -125,16 +259,61 @@ class Galaxy(object):
         return (pixLow[0],pixHig[0],pixLow[1],pixHig[1])
 
     def set_bounding_box(self,size,pixelscale):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         self.bounding_box = utils.get_bounding_box(self.imgheader,self.coords,size,pixelscale)
         x0,x1,y0,y1=self.bounding_box
         self.cutout = self.imgdata[y0:y1,x0:x1]
         return None
 
     def set_segmentation_mask(self,mask):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         self.mask = mask
         return None
 
     def create_segmentation_mask(self,pixscale,radius,**kwargs):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         N,M=self.cutout.shape
         xc=N/2
         yc=M/2
@@ -146,6 +325,21 @@ class Galaxy(object):
         return self.mask
 
     def set_object_mask(self,mask,radius=15):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         if mask[mask>0].size==0:
             print("Warning, object mask is empty. Setting default mask.")
             self.objectMask = self.default_mask(radius)
@@ -154,6 +348,21 @@ class Galaxy(object):
         return None
 
     def create_object_mask(self,pixscale,radius,**kwargs):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         N,M=self.cutout.shape
         xc=N/2
         yc=M/2
@@ -162,6 +371,21 @@ class Galaxy(object):
         return objmap
 
     def set_psf(self,filename=None,psfdata=None,resize=None):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         if filename is not None:
             self.psfname = filename
             self.psf = pyfits.getdata(filename)
@@ -179,10 +403,40 @@ class Galaxy(object):
         return None
 
     def set_sigma(self,sigma):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         self.sigmaImage = sigma
         return None
 
     def default_mask(self,radius):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         if self.cutout is None:
             raise ValueError("cutuout attribute must be defined.")
 
@@ -194,6 +448,21 @@ class Galaxy(object):
         return mask
 
     def estimate_parameters(self,mag_zeropoint,exposure_time,pixscale,radius,rPsf=2.5,**kwargs):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         if self.mask is not None:
             detection_image = self.cutout*(1-self.mask)
         else:
@@ -228,6 +497,21 @@ class Galaxy(object):
         return (xc,yc,mag,r50,axisRatio,positionAngle)
 
     def randomize_new_pars(self,pars):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = pars
 
         new_xc = np.random.normal(xc,0.5)
@@ -258,6 +542,21 @@ class Galaxy(object):
 
 
     def emcee_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=20,nsamples=10000,plot=False,threads=1,ntemps=None):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         nexclude = nsamples//2
 
         masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
@@ -316,7 +615,21 @@ class Galaxy(object):
 
 
     def montecarlo_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars,nRun = 10,verbose=False):
+        r"""
 
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
         N,M=self.cutout.shape
         pars = initPars
         if self.sigmaImage is None:
@@ -387,44 +700,24 @@ class Galaxy(object):
         return modelChain
 
 
-##def plot_results(sampler,pars):
-##    assert len(pars)==sampler.dim
-##    ntemps = sampler.chain.shape[0]
-##    nwalkers = sampler.chain.shape[1]
-##    NP=len(pars)
-##
-##    fig=mpl.figure(figsize=(25,NP*4))
-##
-##    gs = gridspec.GridSpec(NP, 2,width_ratios=[5,1])
-##
-##    main_axes = [mpl.subplot(gs[k]) for k in range(0,2*NP,2)]
-##    hist_axes = [mpl.subplot(gs[k]) for k in range(1,2*NP,2)]
-##
-##    ax=main_axes+hist_axes
-##    mpl.subplots_adjust(hspace=0.0,wspace=0.0)
-##
-##    for n in range(NP):
-##        for j in range(ntemps):
-##            for i in range(nwalkers):
-##                ax[n].plot(sampler.chain[j,i,:,n],color=cm.rainbow_r(float(j)/ntemps),alpha=0.35)
-##                ax[n].set_ylabel(pars[n])
-##
-##            ax[NP+n].hist(sampler.flatchain[j,:,n],bins=50,orientation='horizontal',color=cm.rainbow_r(float(j)/ntemps),histtype='stepfilled',alpha=0.35)
-##
-##        if n<(NP-1):
-##            ax[n].tick_params(labelbottom='off')
-##            ax[NP+n].tick_params(labelbottom='off')
-##        ax[NP+n].tick_params(labelleft='off')
-##
-##    ax[NP-1].set_xlabel(r'$N_\mathrm{step}$')
-##    ax[-1].set_xlabel(r'$N_\mathrm{sol}$')
-##
-##    return fig,ax
-
-
 
 def plot_results(sampler,pars,ntemps=None):
-    ColorsTemps = ["black","DodgerBlue","Crimson","ForestGreen",\
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
+    ColorsTemps = ["Silver","DodgerBlue","Crimson","ForestGreen",\
                    "DarkOrange","Indigo","Goldenrod","Magenta","SteelBlue",\
                    "LimeGreen","Coral","Brown","Violet"]
     import matplotlib.gridspec as gridspec
