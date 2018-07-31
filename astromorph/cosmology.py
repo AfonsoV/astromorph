@@ -1,8 +1,20 @@
+# Licensed under GNU GENERAL PUBLIC LICENSE Version 3 - see LICENSE.txt
+"""
+Functions from the astromorph.cosmology module.
+
+This module contains some cosmological functions helpful to the determination
+of galaxy properties. It is simply a wrapper of the more complete
+astropy.cosmology module.
+"""
+
 from scipy.integrate import simps
 import astropy.constants as const
+import astropy.cosmology as Cosmos
 import astropy.units as u
 import numpy as np
 from .config import ConfigFile
+
+
 
 
 Obar = float(ConfigFile["cosmology"]["Obar"])
@@ -12,6 +24,15 @@ Orad = float(ConfigFile["cosmology"]["Orad"])
 Ow = float(ConfigFile["cosmology"]["Ow"])
 w = float(ConfigFile["cosmology"]["w"])
 H0 = float(ConfigFile["cosmology"]["H0"])
+
+# H0 = 70
+# Omat = 0.3
+# Obar = 0.11
+# Ok = 0
+# Orad = 0
+# Ow = 0.7
+# w = -1.0
+# astroCosmology = Cosmos.wCDM(H0,Omat,Ow,w0=w,Ob0=Obar,Ogamma0=Orad,Ok0=Ok)
 
 
 Msun=const.M_sun              #kg

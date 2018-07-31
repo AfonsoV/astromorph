@@ -35,13 +35,13 @@ def gen_entropy_index(img,alpha):
 
     data = abs(img.copy())
     data=data[data>0]
-    media=nannp.mean(data)
+    media=np.nanmean(data)
     Npop = np.size(data)
 
     if alpha==0:
-        gei = np.sum(log(media/data))/Npop
+        gei = np.sum(np.log(media/data))/Npop
     elif alpha==1:
-        gei = np.sum((data/media)*log(data/media))/Npop
+        gei = np.sum((data/media)*np.log(data/media))/Npop
     else:
         gei = np.sum((data/media)**alpha-1)/(Npop*alpha*(alpha-1))
     return gei

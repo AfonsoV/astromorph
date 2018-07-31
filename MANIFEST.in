@@ -1,2 +1,2 @@
 include astromorph/astromorph.cfg
-include scripts/*
+include astromorph/scripts/*.py

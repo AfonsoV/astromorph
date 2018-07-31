@@ -27,111 +27,35 @@ from .CAS import Anel
 #############################################
 ############################################# General Sersic
 #############################################
-def plot_results(An,Num,var,absolute=True):
-    r"""
 
-    Parameters
-    ----------
-
-    Returns
-    -------
-
-    References
-    ----------
-
-    Examples
-    --------
-
-    """
-    fig,(ax0,ax1) = mpl.subplots(nrows=2,sharex=True)
-    fig.subplots_adjust(hspace=0.0)
-    ax0.scatter(An[Num>0],Num[Num>0],c='DodgerBlue',s=40,alpha=0.5)
-    ax0.plot(sort(An),sort(An),'r--')
-    ax0.set_ylabel(r'$%s\ [\mathrm{numerical}]$'%var)
-
-    if absolute:
-        ax1.scatter(An[Num>0], abs(Num[Num>0]-An[Num>0])/An[Num>0],c='DodgerBlue',s=40,alpha=0.5)
-        ax1.set_ylabel(r'$|\Delta %s|/%s$'%(var,var))
-    else:
-        ax1.scatter(An[Num>0], (Num[Num>0]-An[Num>0])/An[Num>0],c='DodgerBlue',s=40,alpha=0.5)
-        ax1.set_ylabel(r'$\Delta %s/%s$'%(var,var))
-
-    ax1.hlines(0,0,1.05*max(An))
-    ax1.set_xlim(0,1.05*max(An))
-    ax1.set_xlabel(r'$%s [\mathrm{analytical}]$'%var)
-    ax0.set_yticks(ax0.get_yticks()[1:-1])
-    ax1.set_yticks(ax1.get_yticks()[1:-1])
-    return fig,ax0,ax1
 
 def kappa(n):
     r"""
 
     Parameters
     ----------
+        n : float
+            the value of the sersic index to compute kappa[b] for.
 
     Returns
     -------
+        kappa : float
+            the value of kappa, given the input sersic index n
 
     References
     ----------
+        Ciotti & Bertin 1999 (https://ui.adsabs.harvard.edu/#abs/1999A&A...352..447C/abstract)
 
     Examples
     --------
+        >>> kappa(1)
+        1.678...
 
     """
     from scipy.special import gammaincinv
     return gammaincinv(2*n,1./2)
 
-def test_kappa():
-    r"""
 
-    Parameters
-    ----------
-
-    Returns
-    -------
-
-    References
-    ----------
-
-    Examples
-    --------
-
-    """
-    "Compare the obtained values with the Ciotti & Bertin Approximation"
-
-    n=np.linspace(0.1,10)
-    def b_ciotti(n):
-        return 2*n-1./3+4./(405*n) + 46./(25515*n*n)
-
-    tstart = time.time()
-    bc=b_ciotti(n)
-    print("Ciotti & Bertin:\t %.4f millisec"%((time.time()-tstart)*1000))
-    tstart=time.time()
-    kn=kappa(n)
-    print("This work:\t %.4f millisec"%((time.time()-tstart)*1000))
-
-    fig,(ax0,ax1)=mpl.subplots(nrows=2,sharex=True)
-    fig.subplots_adjust(hspace=0.0)
-    ax0.plot(n,bc,'r-',lw=2.5,label='Ciotti & Bertin (1999)')
-    ax0.plot(n,kn,'b--',label='This work',lw=2)
-    ax0.set_ylabel(r'$\kappa$')
-    ax0.legend(loc='lower right')
-    ax0.semilogy()
-    ax0.yaxis.set_major_formatter(mpt.ScalarFormatter())
-    ax0.set_yticks(ax0.get_yticks()[2:-2])
-    diff = (kn-bc)/bc
-    ax1.plot(n,abs(diff),'k',lw=2)
-    ax1.hlines(0,1,10)
-    ax1.set_xlabel(r'$n$')
-    ax1.set_ylabel(r'$|\Delta \kappa|/\kappa$')
-    ax1.semilogy()
-##    ax1.yaxis.set_major_formatter(mpt.ScalarFormatter())
-    ax1.set_yticks(ax1.get_yticks()[2:-2])
-    for eixo in [ax0,ax1]:
-        eixo.minorticks_on()
-    mpl.show()
-    return
 
 def gammainc(alfa,x):
     r"""
@@ -1094,7 +1018,7 @@ def create_gaussian_sky(shape,stddev,mean=0):
     """
     return rdm.normal(mean*np.ones(shape),stddev)
 
-def poissonFilter(model,gain,exposure_time=1):
+def poissonFilter(model,gain=1,exposure_time=1):
     r"""
 
     Parameters
@@ -1111,3 +1035,95 @@ def poissonFilter(model,gain,exposure_time=1):
 
     """
     return rdm.poisson(model*exposure_time*gain)/gain
+
+
+######################################################################
+###################################################################### General Test
+######################################################################
+
+def plot_results(An,Num,var,absolute=True):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    fig,(ax0,ax1) = mpl.subplots(nrows=2,sharex=True)
+    fig.subplots_adjust(hspace=0.0)
+    ax0.scatter(An[Num>0],Num[Num>0],c='DodgerBlue',s=40,alpha=0.5)
+    ax0.plot(sort(An),sort(An),'r--')
+    ax0.set_ylabel(r'$%s\ [\mathrm{numerical}]$'%var)
+
+    if absolute:
+        ax1.scatter(An[Num>0], abs(Num[Num>0]-An[Num>0])/An[Num>0],c='DodgerBlue',s=40,alpha=0.5)
+        ax1.set_ylabel(r'$|\Delta %s|/%s$'%(var,var))
+    else:
+        ax1.scatter(An[Num>0], (Num[Num>0]-An[Num>0])/An[Num>0],c='DodgerBlue',s=40,alpha=0.5)
+        ax1.set_ylabel(r'$\Delta %s/%s$'%(var,var))
+
+    ax1.hlines(0,0,1.05*max(An))
+    ax1.set_xlim(0,1.05*max(An))
+    ax1.set_xlabel(r'$%s [\mathrm{analytical}]$'%var)
+    ax0.set_yticks(ax0.get_yticks()[1:-1])
+    ax1.set_yticks(ax1.get_yticks()[1:-1])
+    return fig,ax0,ax1
+
+def test_kappa():
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    "Compare the obtained values with the Ciotti & Bertin Approximation"
+
+    n=np.linspace(0.1,10)
+    def b_ciotti(n):
+        return 2*n-1./3+4./(405*n) + 46./(25515*n*n)
+
+    tstart = time.time()
+    bc=b_ciotti(n)
+    print("Ciotti & Bertin:\t %.4f millisec"%((time.time()-tstart)*1000))
+    tstart=time.time()
+    kn=kappa(n)
+    print("This work:\t %.4f millisec"%((time.time()-tstart)*1000))
+
+    fig,(ax0,ax1)=mpl.subplots(nrows=2,sharex=True)
+    fig.subplots_adjust(hspace=0.0)
+    ax0.plot(n,bc,'r-',lw=2.5,label='Ciotti & Bertin (1999)')
+    ax0.plot(n,kn,'b--',label='This work',lw=2)
+    ax0.set_ylabel(r'$\kappa$')
+    ax0.legend(loc='lower right')
+    ax0.semilogy()
+    ax0.yaxis.set_major_formatter(mpt.ScalarFormatter())
+    ax0.set_yticks(ax0.get_yticks()[2:-2])
+    diff = (kn-bc)/bc
+    ax1.plot(n,abs(diff),'k',lw=2)
+    ax1.hlines(0,1,10)
+    ax1.set_xlabel(r'$n$')
+    ax1.set_ylabel(r'$|\Delta \kappa|/\kappa$')
+    ax1.semilogy()
+##    ax1.yaxis.set_major_formatter(mpt.ScalarFormatter())
+    ax1.set_yticks(ax1.get_yticks()[2:-2])
+    for eixo in [ax0,ax1]:
+        eixo.minorticks_on()
+    mpl.show()
+    return

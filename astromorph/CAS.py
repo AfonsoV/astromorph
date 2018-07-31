@@ -1,3 +1,12 @@
+# Licensed under GNU GENERAL PUBLIC LICENSE Version 3 - see LICENSE.txt
+"""
+Functions from the astromorph.CAS module.
+
+This module contains the implementation of the CAS system detailed in:
+ - Bershady et al. (2000): http://adsabs.harvard.edu/abs/2000AJ....119.2645B
+ - Conselice et al. (2003): http://adsabs.harvard.edu/abs/2003ApJS..147....1C
+"""
+
 import sys
 from . import utils
 from . import plot_utils

@@ -1,3 +1,8 @@
+# Licensed under GNU GENERAL PUBLIC LICENSE Version 3 - see LICENSE.txt
+"""
+Utility module to load default configuration file for the astromorph package
+"""
+
 import configparser
 
 ConfigFile = configparser.ConfigParser()

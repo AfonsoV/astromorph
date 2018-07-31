@@ -158,6 +158,22 @@ class Galaxy(object):
         self.sigmaImage = None
         self.objectMask = None
 
+    def __repr__(self):
+        stringShow =  f"Galaxy Data: {self.original_name}\n"
+        stringShow += f"Galaxy coordinates: {self.coords}\n"
+        if self.cutout is not None:
+            stringShow += f"Cutout size: {self.cutout.shape}\n"
+        else:
+            stringShow += f"Cutout size: {self.cutout}\n"
+        return stringShow
+
+    def __str__(self):
+        if self.cutout is None:
+            data = f"with no associated data"
+        else:
+            data = f"with associated {self.cutout.shape} shape data"
+        return f"Galaxy class object {data}"
+
     def set_coords(self,coords):
         r"""
 
@@ -702,21 +718,21 @@ class Galaxy(object):
 
 
 def plot_results(sampler,pars,ntemps=None):
-        r"""
+    r"""
 
-        Parameters
-        ----------
+    Parameters
+    ----------
 
-        Returns
-        -------
+    Returns
+    -------
 
-        References
-        ----------
+    References
+    ----------
 
-        Examples
-        --------
+    Examples
+    --------
 
-        """
+    """
     ColorsTemps = ["Silver","DodgerBlue","Crimson","ForestGreen",\
                    "DarkOrange","Indigo","Goldenrod","Magenta","SteelBlue",\
                    "LimeGreen","Coral","Brown","Violet"]

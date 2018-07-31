@@ -1,3 +1,11 @@
+# Licensed under GNU GENERAL PUBLIC LICENSE Version 3 - see LICENSE.txt
+"""
+Functions from the astromorph.ADD module.
+
+This module contains additional morphological quantifiers that are not included
+in the standard systems of morphological classification.
+"""
+
 from . import utils
 import numpy as np
 import matplotlib.pyplot as mpl
@@ -11,6 +19,8 @@ def sbprofiler(img,segmap):
 
     Parameters
     ----------
+    img : float, array
+        The image array containing the data for which to select the region.
 
     Returns
     -------
