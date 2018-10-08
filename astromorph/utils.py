@@ -1803,8 +1803,9 @@ def get_bounding_box(header,coords,size,pixelscale):
         A set of coordinates (with ra,dec values) representing the center of
         the bounding box.
 
-    size : float
-        The size of the bounding box in arcseconds.
+    size : float, [tuple]
+        The size of the bounding box in arcseconds. Use a tuple non-square
+        cutouts.
 
     pixelscale : float
         The pixel scale (in arcseconds per pixel) of the given image.
@@ -1829,12 +1830,17 @@ def get_bounding_box(header,coords,size,pixelscale):
         centerCoords = get_center_coords_hdr(header,coords.ra.value,\
                                                    coords.dec.value)
 
-    hsize = int(size/pixelscale)//2
+    if isinstance(size,tuple):
+        hsizex = int(size[0]/pixelscale)//2
+        hsizey = int(size[1]/pixelscale)//2
+    else:
+        hsizex = int(size/pixelscale)//2
+        hsizey=hsizex
 
-    xl = int(centerCoords[0]-hsize)
-    xu = int(centerCoords[0]+hsize)
-    yl = int(centerCoords[1]-hsize)
-    yu = int(centerCoords[1]+hsize)
+    xl = int(centerCoords[0]-hsizex)
+    xu = int(centerCoords[0]+hsizex)
+    yl = int(centerCoords[1]-hsizey)
+    yu = int(centerCoords[1]+hsizey)
     return (xl,xu,yl,yu)
 
 def get_cutout(imgname,coords,size,pixelscale):
