@@ -295,6 +295,28 @@ class Galaxy(object):
         self.cutout = self.imgdata[y0:y1,x0:x1]
         return None
 
+    def compute_local_sky(self,k=3):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
+        if self.cutout is None:
+            raise ValueError("the data cutout has to be defined")
+        self.sky_value, self.sky_rms = utils.sky_value(self.cutout,k=k)
+        return self.sky_value, self.sky_rms
+
+
     def set_segmentation_mask(self,mask):
         r"""
 
