@@ -89,8 +89,13 @@ class LensingModel(object):
             self.header = pyfits.getheader("%s_gamma.fits"%(filename))
             self.gamma = pyfits.getdata("%s_gamma.fits"%(filename))
             self.kappa = pyfits.getdata("%s_kappa.fits"%(filename))
-            self.xdeflect = pyfits.getdata("%s_x-arcsec-deflect.fits"%(filename))
-            self.ydeflect = pyfits.getdata("%s_y-arcsec-deflect.fits"%(filename))
+            try:
+                self.xdeflect = pyfits.getdata("%s_x-arcsec-deflect.fits"%(filename))
+                self.ydeflect = pyfits.getdata("%s_y-arcsec-deflect.fits"%(filename))
+            except IOError:
+                self.xdeflect = None
+                self.ydeflect = None
+
         elif (kappa is not None) and (gamma is not None) and (xdeflect is not None) and (ydeflect is not None):
             self.modelname = None
             self.gamma = gamma
