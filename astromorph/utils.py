@@ -767,7 +767,7 @@ def gen_segmap_watershed(img,thresholds=[100,50,25,15,12,10,7,5,3,2],mSigma=0.75
         sm[sm>0]=1
         segmap += sm
 
-    segmap = sci_nd.gaussian_filter(segmap,sigma=mSigma)
+    segmap = sci_nd.gaussian_filter(segmap.astype(np.float32),sigma=mSigma)
 
     ss = np.ceil(np.sqrt(Amin)).astype(np.int8)
     peaksImage = peak_local_max(segmap, indices=False, footprint=np.ones((ss, ss)),
@@ -865,7 +865,7 @@ def gen_segmap_tresh(img,xc,yc,pixscale,radius =0.5,thresh=5.0,Amin=5,k_sky=3,al
 
 
     if all_detection:
-        return Regions
+        return sci_nd.label(Regions)[0]
     else:
         segmap = select_object_map(xc,yc,Regions,pixscale,radius)
         return sci_nd.binary_dilation(segmap,structure=structure).astype(np.int16)
