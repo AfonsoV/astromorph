@@ -13,6 +13,138 @@ import time
 import emcee
 
 
+class SersicParameters:
+
+    def __init__(self,sky):
+        self.sigma_xc = 1.5
+        self.sigma_yc = 1.5
+        self.sigma_mag = 0.5
+        self.sigma_radius = 5.0
+        self.sigma_sersic_index = 1.0
+        self.sigma_axis_ratio = 0.075
+        self.sigma_position_angle = 5.0
+        self.sigma_sky = np.abs(0.25*sky) + 1e-3
+
+        self.Sigmas = [self.sigma_xc,self.sigma_yc,self.sigma_mag,\
+                      self.sigma_radius,self.sigma_sersic_index,\
+                      self.sigma_axis_ratio,self.sigma_position_angle]
+
+
+
+    def get_sigma(self,npars):
+        p = []
+        for i in range(npars):
+            p +=self.Sigmas
+        return p + [self.sigma_sky]
+
+### MCMC
+def lnlikelihood_MP(modelPars,image,sigma,mag_zeropoint,exposure_time,nModels,psf,lensingPars):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+
+    model = np.zeros_like(image)
+    for i in range(nModels):
+
+        xc=modelPars[0+7*i]
+        yc=modelPars[1+7*i]
+        mag=modelPars[2+7*i]
+        radius=modelPars[2+7*i]
+        n=modelPars[4+7*i]
+        axis_ratio=modelPars[5+7*i]
+        position_angle=modelPars[6+7*i]
+
+        if lensingPars is None:
+            SingleModel = simulation.generate_sersic_model(image.shape,\
+                        (xc,yc,mag,radius,n,axis_ratio,position_angle),\
+                        mag_zeropoint,exposure_time)
+        else:
+            SingleModel = simulation.generate_lensed_sersic_model(image.shape,\
+                        (xc,yc,mag,radius,n,axis_ratio,position_angle),\
+                        lensingPars,mag_zeropoint,exposure_time)
+        model += SingleModel
+
+    if psf is not None:
+        model = fftconvolve(model,psf,mode="same")
+        # model = convolve_fft(model,self.psf)
+
+    N,M = model.shape
+    x,y = np.meshgrid(range(N),range(M))
+    model += modelPars[-1] ## + dx_sky*(x-N/2) +dy_sky*(y-M/2)
+
+    return -0.5*np.ma.sum( (image-model)*(image-model)/(sigma*sigma) + np.ma.log(2*np.pi*sigma*sigma) )
+
+def prior_MP(pars,shape,nModels):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    N,M = shape
+
+    totalProb = 0
+    for i in range(nModels):
+        if  (N/4<pars[0+7*i]<3*N/4) and\
+            (M/4<pars[1+7*i]<3*M/4) and\
+            (0<pars[2+7*i]<=35) and\
+            (1e-3<=pars[3+7*i]<=20) and\
+            (0.1<=pars[4+7*i]<=10) and\
+            (0.1<=pars[5+7*i]<=1) and\
+            (-90<=pars[6+7*i]<=90):
+            totalProb += 1
+
+    if totalProb == nModels:
+        return 0
+    else:
+        return -np.inf
+
+def lnprobability_MP(pars,image,sigma,mag_zeropoint,exposure_time,nModels=1,psf=None,lensingPars=None):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    pr = prior_MP(pars,image.shape,nModels)
+    if not np.isfinite(pr):
+        return -np.inf
+    LL = pr + lnlikelihood_MP(pars,image,sigma,mag_zeropoint,exposure_time,nModels,psf,lensingPars)
+    if np.isfinite(LL):
+        return LL
+    else:
+        return -np.inf
+
 
 ### MCMC
 def lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
@@ -72,7 +204,7 @@ def prior(pars,shape):
     if  (N/4<pars[0]<3*N/4) and\
         (M/4<pars[1]<3*M/4) and\
         (0<pars[2]<=35) and\
-        (1e-3<=pars[3]<=50) and\
+        (1e-3<=pars[3]<=10) and\
         (0.1<=pars[4]<=1) and\
         (-90<=pars[5]<=90):
         return 0.0
@@ -652,6 +784,86 @@ class Galaxy(object):
         return samples.T
 
 
+    def emcee_fit_MP(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=20,nsamples=10000,plot=False,threads=1,ntemps=None):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
+        nexclude = nsamples//2
+        nModels = (len(initPars)-1)//7
+        modelPars = SersicParameters(initPars[-1])
+
+        masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
+        masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
+
+        ndim, nwalkers = len(initPars), nchain * nModels
+
+        sigmaPars = modelPars.get_sigma(nModels)
+        if len(sigmaPars) != len(initPars):
+            for i in range(len(sigmaPars),len(initPars)):
+                sigmaPars.append(1e-3)
+
+        pos = np.array([np.random.normal(initPars,sigmaPars) for i in range(nwalkers)])
+
+        ## Standardize random starting points to be within accepted ranges
+        for i in range(nModels):
+            pos[:,0+7*i][pos[:,0]<0]=1
+            pos[:,0+7*i][pos[:,0]>self.cutout.shape[0]]=self.cutout.shape[0]-1
+            pos[:,1+7*i][pos[:,1]<0]=1
+            pos[:,1+7*i][pos[:,1]>self.cutout.shape[1]]=self.cutout.shape[1]-1
+            pos[:,3+7*i][pos[:,3]<0.5]=0.5
+            pos[:,3+7*i][pos[:,3]>50]=50
+            pos[:,4+7*i][pos[:,4]<0.1]=0.1
+            pos[:,4+7*i][pos[:,4]>10]=10.0
+            pos[:,5+7*i][pos[:,4]<0.1]=0.1
+            pos[:,5+7*i][pos[:,4]>1]=1.0
+            pos[:,6+7*i][pos[:,5]>90]-=180
+            pos[:,6+7*i][pos[:,5]<-90]+=180
+
+        tstart = time.time()
+
+        if ntemps is None:
+            sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability_MP,\
+                        args=(masked_image, masked_sigma,mag_zeropoint,\
+                              exposure_time,nModels,self.psf,lensingPars),\
+                        threads=threads,a=2.4)
+            sampler.run_mcmc(pos, nsamples)
+        else:
+            sampler = emcee.PTSampler(ntemps,nwalkers, ndim, lnprobability_MP,prior_MP,\
+                    loglargs=(masked_image, masked_sigma,mag_zeropoint,\
+                              exposure_time,nModels),\
+                    logpargs=(masked_image.shape,nModels),threads=threads)
+            sampler.run_mcmc([pos]*ntemps, nsamples)
+
+
+        print('\telapsed %.8f seconds'%(time.time()-tstart))
+        print("\tMean acceptance fraction: %.3f"%(np.mean(sampler.acceptance_fraction)))
+        if plot is True:
+            labels = [r"$x_c$",r"$y_c$",r'$mag$',\
+                      r'$r_e\ [\mathrm{arcsec}]$',r"$n$",r"$(b/a)$",\
+                      r"$\theta_\mathrm{PA}$"]*nModels + ["sky"]
+            print(labels)
+            plot_results(sampler,labels,ntemps=ntemps)
+
+        if  ntemps is not None:
+            samples = sampler.chain[:,:, nexclude:, :].reshape((-1, ndim))
+        else:
+            samples = sampler.chain[:, nexclude:, :].reshape((-1, ndim))
+
+        return samples.T
+
+
     def montecarlo_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars,nRun = 10,verbose=False):
         r"""
 
@@ -780,7 +992,7 @@ def plot_results(sampler,pars,ntemps=None):
     for n in range(NP):
         for j in range(ntemps):
             for i in range(nwalkers):
-                ax[n].plot(chain[j,i,:,n],alpha=0.35,color=ColorsTemps[j])
+                ax[n].plot(chain[j,i,:,n],alpha=0.35,color=ColorsTemps[j],lw=0.5)
                 ax[n].set_ylabel(pars[n])
             ax[NP+n].hist(flatChain[j,:,n],bins=50,orientation='horizontal',color='silver',histtype='stepfilled')
         if n<(NP-1):

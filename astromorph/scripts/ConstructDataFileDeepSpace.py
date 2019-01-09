@@ -25,7 +25,7 @@ import h5py
 from astropy.modeling import models, fitting
 
 
-from easyOutput import eazyResults
+# from easyOutput import eazyResults
 
 def create_sigma_image(img,gain,ncombine=1):
     sky_med,sky_std = utils.sky_value(img)
@@ -376,7 +376,6 @@ def find_all_models(dataFolder,rejectList=[]):
 
 def select_cluster(galName):
     root = galName.split("-")[0]
-
     if "A370" in root:
         return "abell370"
     elif "A2744" in root:
@@ -406,32 +405,33 @@ if __name__== "__main__":
     PSFTRIM = 41
 
     catname = sys.argv[1]
-    rootDataFolder ="/data2/bribeiro/HubbleFrontierFields/deepspace"
+    # rootDataFolder ="/data2/bribeiro/HubbleFrontierFields/deepspace"
+    rootDataFolder="../../data/deepspace/"
 
     filters=["f435w","f606w","f814w","f105w","f125w","f140w","f160w"]
     filtersStack = ["f105w","f125w","f140w","f160w"]
     allClusters = ["abell370","abell2744","abell1063","macs0416","macs0717","macs1149"]
 
 
-    zphotCatalogs = { "%s"%(c):eazyResults("%s/%sclu_catalogs/eazy/%sclu_v3.9"%(rootDataFolder,c,c),\
-                     "%sclu_v3.9"%(c)) for c in allClusters}
+    # zphotCatalogs = { "%s"%(c):eazyResults("%s/%sclu_catalogs/eazy/%sclu_v3.9"%(rootDataFolder,c,c),\
+    #                  "%sclu_v3.9"%(c)) for c in allClusters}
 
     photCatalogs = {"%s"%(c):Table.read("%s/%sclu_catalogs/hffds_%sclu_v3.9.cat"%(rootDataFolder,c,c),format="ascii")\
                      for c in allClusters}
 
 
-    parent_catalogs = {"A2744275":read_catalog("./A2744_275C.CAT"),\
-                       "A2744336":read_catalog("./A2744_336C.CAT"),\
-                       "A370275":read_catalog("./A370_275C.CAT"),\
-                       "A370336":read_catalog("./A370_336C.CAT"),\
-                       "AS1063275":read_catalog("./AS1063_275C.CAT"),\
-                       "AS1063336":read_catalog("./AS1063_336C.CAT"),\
-                       "M0416275":read_catalog("./M0416_275C.CAT"),\
-                       "M0416336":read_catalog("./M0416_336C.CAT"),\
-                       "M0717275":read_catalog("./M0717_275C.CAT"),\
-                       "M0717336":read_catalog("./M0717_336C.CAT"),\
-                       "M1149275":read_catalog("./M1149_275C.CAT"),\
-                       "M1149336":read_catalog("./M1149_336C.CAT")}
+    # parent_catalogs = {"A2744275":read_catalog("./A2744_275C.CAT"),\
+    #                    "A2744336":read_catalog("./A2744_336C.CAT"),\
+    #                    "A370275":read_catalog("./A370_275C.CAT"),\
+    #                    "A370336":read_catalog("./A370_336C.CAT"),\
+    #                    "AS1063275":read_catalog("./AS1063_275C.CAT"),\
+    #                    "AS1063336":read_catalog("./AS1063_336C.CAT"),\
+    #                    "M0416275":read_catalog("./M0416_275C.CAT"),\
+    #                    "M0416336":read_catalog("./M0416_336C.CAT"),\
+    #                    "M0717275":read_catalog("./M0717_275C.CAT"),\
+    #                    "M0717336":read_catalog("./M0717_336C.CAT"),\
+    #                    "M1149275":read_catalog("./M1149_275C.CAT"),\
+    #                    "M1149336":read_catalog("./M1149_336C.CAT")}
 
 
     # clusters = {"A2744275":"abell2744",\
@@ -515,7 +515,8 @@ if __name__== "__main__":
 
 
 
-        lens_models_folder = "/data2/bribeiro/HubbleFrontierFields/LensModels/%s"%(cluster)
+        # lens_models_folder = "/data2/bribeiro/HubbleFrontierFields/LensModels/%s"%(cluster)
+        lens_models_folder = "../../data/LensModels/%s"%(cluster)
         lensModelNames = find_all_models(lens_models_folder,rejectModels)
         nModels = len(lensModelNames)
         ConfigFile = configparser.ConfigParser()
@@ -553,7 +554,12 @@ if __name__== "__main__":
 
     fout = h5py.File("%s_deepspace_galaxyData.hdf5"%(catname.split(".")[0]),"w")
 
-    testGals = []
+    testGals = ["A370336-9553634160",\
+                "A370336-9512334561",\
+                "A370336-9533834017",\
+                "A370336-9539455699",\
+                "A370336-9581434094",\
+                "A370336-9505833405"]
     # testGals = ["A370336-9488645446","A370336-9541335531",\
     #            "A370336-9531734304","A370275-9495434273",\
     #            "A370275-9493243395","A370336-9576034044",\
@@ -592,13 +598,14 @@ if __name__== "__main__":
         # else:
         #     continue
 
-        galRedshift = catalog["z_phot"][num]
+        galRedshift = catalog["redshift"][num]
         parentCat = catalog
         # clusterCat = clusters[galName.split("-")[0]]
         clusterCat = select_cluster(galName)
+        print(galName,clusterCat)
 
         photoCat = photCatalogs[clusterCat]
-        eazyCat = zphotCatalogs[clusterCat]
+        # eazyCat = zphotCatalogs[clusterCat]
         if clusterCat == "abell1063":
             ### need to update name to match lensing models
             ### image names must be done first
@@ -756,7 +763,7 @@ if __name__== "__main__":
         sigimage = create_sigma_image(stackedGAL*stackedWEIGHTS,2.5)
         # pre_sigma = np.sqrt(stackedGAL*stackedGAL+stackedRMS*stackedRMS)
         # sigimage = np.sqrt(pre_sigma)
-        psfimage = stack_psf(cluster,filtersStack,weights)
+        psfimage = stack_psf(clusterCat,filtersStack,weights)
 
 
         regionMeasurements = getRegionData(galaxy,filters,segmap,weights=weights)

@@ -2,6 +2,7 @@ astromorph/__pycache__
 astromorph/*.pyc
 
 testingScript.py
+testDev.py
 
 # SetupTools Folders
 build/
