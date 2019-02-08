@@ -218,7 +218,7 @@ class LensingModel(object):
         self.shear_angle = np.degrees(np.arctan2(-0.5*(dxd_dy+dyd_dx),+0.5*(dyd_dy-dxd_dx)))
         return self.shear_angle
 
-    def get_magnification(self,redshift,minMag=5e-2):
+    def get_magnification(self,redshift,minMag=5e-4):
         r"""
 
         Parameters

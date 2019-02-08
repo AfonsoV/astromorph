@@ -18,6 +18,12 @@ colorgrn = "\033[1;32m{0}\033[00m"
 colorblu = "\033[1;34m{0}\033[00m"
 colorylw = "\033[1;33m{0}\033[00m"
 
+CRED = '\033[91m'
+CGREEN = '\033[92m'
+CYELLOW = '\033[93m'
+CBLUE = '\033[94m'
+CEND = '\033[0m'
+
 
 if sys.platform =='darwin':
     SEx_COMMAND = "sex"

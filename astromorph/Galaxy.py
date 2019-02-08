@@ -9,8 +9,17 @@ from . import utils
 from . import plot_utils as putils
 from . import simulation
 from . import galfit
+from .models import LensedSersicModel,LensPars,PsfModel,LensedSersicPSFModel
+from astropy.modeling import models, fitting
+import warnings
+fitterLSQ = fitting.LevMarLSQFitter()
+from scipy.optimize import leastsq,OptimizeWarning
+
 import time
 import emcee
+import warnings
+
+N_MAX = 10.0
 
 
 class SersicParameters:
@@ -18,7 +27,7 @@ class SersicParameters:
     def __init__(self,sky):
         self.sigma_xc = 1.5
         self.sigma_yc = 1.5
-        self.sigma_mag = 0.5
+        self.sigma_mag = 10.5
         self.sigma_radius = 5.0
         self.sigma_sersic_index = 1.0
         self.sigma_axis_ratio = 0.075
@@ -37,7 +46,163 @@ class SersicParameters:
             p +=self.Sigmas
         return p + [self.sigma_sky]
 
-### MCMC
+class SersicPSFParameters:
+
+    def __init__(self,sky):
+        self.sigma_xc = 2.5
+        self.sigma_yc = 2.5
+        self.sigma_mag = 15.0
+        self.sigma_radius = 5.0
+        self.sigma_sersic_index = 1.0
+        self.sigma_axis_ratio = 0.075
+        self.sigma_position_angle = 5.0
+        self.sigma_xPSF = 2.5
+        self.sigma_yPSF= 2.5
+        self.sigma_IPSF= 15.0
+        self.sigma_sky = np.abs(0.25*sky) + 1e-3
+
+        self.Sigmas = [self.sigma_xc,self.sigma_yc,self.sigma_mag,\
+                      self.sigma_radius,self.sigma_sersic_index,\
+                      self.sigma_axis_ratio,self.sigma_position_angle,\
+                      self.sigma_xPSF,self.sigma_yPSF,self.sigma_IPSF]
+
+
+    def get_sigma(self,npars):
+        p = []
+        for i in range(npars):
+            p +=self.Sigmas
+        return p + [self.sigma_sky]
+
+################################################################################
+################################################################################
+# MCMC
+################################################################################
+################################################################################
+
+
+def lnlikelihood_LensedSersicPSF(modelPars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+
+
+    xc=modelPars[0]
+    yc=modelPars[1]
+    Ieff=modelPars[2]
+    radius=modelPars[2]
+    n=modelPars[4]
+    axis_ratio=modelPars[5]
+    position_angle=modelPars[6]
+    xPSF=modelPars[6]
+    yPSF=modelPars[7]
+    iPSF=modelPars[8]
+    skyValue=modelPars[9]
+
+    sersicModel = LensedSersicPSFModel(lensPars=lensingPars,\
+                                     magZP=mag_zeropoint,\
+                                     psf=psf,\
+                                     x_0=xc,\
+                                     y_0=yc,\
+                                     I_eff=Ieff,\
+                                     r_eff=radius,\
+                                     n=n,\
+                                     axratio=axis_ratio,\
+                                     theta=position_angle,\
+                                     xPSF=xPSF,\
+                                     yPSF=yPSF,\
+                                     I_psf=iPSF,\
+                                     OverSampling=10)
+    skyModel = models.Const2D(amplitude = skyValue)
+
+    model = sersicModel+skyModel
+
+    N,M = image.shape
+    x,y = np.mgrid[:N,:M]
+    modelEval = model(x,y) ## + dx_sky*(x-N/2) +dy_sky*(y-M/2)
+
+    if psf is not None:
+        modelFinal = fftconvolve(modelEval,psf,mode="same")
+        # model = convolve_fft(model,self.psf)
+    else:
+        warnings.warn("No PSF provided. Convlution not performed.")
+
+
+    return -0.5*np.ma.sum( (image-modelFinal)*(image-modelFinal)/(sigma*sigma) + np.ma.log(2*np.pi*sigma*sigma) )
+
+def prior_LensedSersicPSF(pars,shape):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    N,M = shape
+    if  (N/4<pars[0]<3*N/4) and\
+        (M/4<pars[1]<3*M/4) and\
+        (0<pars[2]<=1e4) and\
+        (1e-3<=pars[3]<=20) and\
+        (0.1<=pars[4]<=N_MAX) and\
+        (0.1<=pars[5]<=1) and\
+        (-90<=pars[6]<=90) and\
+        (N/4<pars[7]<3*N/4) and\
+        (M/4<pars[8]<3*M/4) and\
+        (0<pars[9]<1e4):
+        return 0
+    else:
+        return -np.inf
+
+def lnprobability_LensedSersicPSF(pars,image,sigma,mag_zeropoint,exposure_time,psf=None,lensingPars=None):
+    r"""
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    References
+    ----------
+
+    Examples
+    --------
+
+    """
+    pr = prior_LensedSersicPSF(pars,image.shape)
+    if not np.isfinite(pr):
+        return -np.inf
+    LL = pr + lnlikelihood_LensedSersicPSF(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars)
+    if np.isfinite(LL):
+        return LL
+    else:
+        return -np.inf
+
+
+################################################################################
+# Multi-Model
+################################################################################
+
+
 def lnlikelihood_MP(modelPars,image,sigma,mag_zeropoint,exposure_time,nModels,psf,lensingPars):
     r"""
 
@@ -70,6 +235,7 @@ def lnlikelihood_MP(modelPars,image,sigma,mag_zeropoint,exposure_time,nModels,ps
             SingleModel = simulation.generate_sersic_model(image.shape,\
                         (xc,yc,mag,radius,n,axis_ratio,position_angle),\
                         mag_zeropoint,exposure_time)
+            warnings.warn("No lensing parameters provided. Distortion not performed.")
         else:
             SingleModel = simulation.generate_lensed_sersic_model(image.shape,\
                         (xc,yc,mag,radius,n,axis_ratio,position_angle),\
@@ -79,6 +245,8 @@ def lnlikelihood_MP(modelPars,image,sigma,mag_zeropoint,exposure_time,nModels,ps
     if psf is not None:
         model = fftconvolve(model,psf,mode="same")
         # model = convolve_fft(model,self.psf)
+    else:
+        warnings.warn("No PSF provided. Convlution not performed.")
 
     N,M = model.shape
     x,y = np.meshgrid(range(N),range(M))
@@ -110,7 +278,7 @@ def prior_MP(pars,shape,nModels):
             (M/4<pars[1+7*i]<3*M/4) and\
             (0<pars[2+7*i]<=35) and\
             (1e-3<=pars[3+7*i]<=20) and\
-            (0.1<=pars[4+7*i]<=10) and\
+            (0.1<=pars[4+7*i]<=N_MAX) and\
             (0.1<=pars[5+7*i]<=1) and\
             (-90<=pars[6+7*i]<=90):
             totalProb += 1
@@ -146,7 +314,9 @@ def lnprobability_MP(pars,image,sigma,mag_zeropoint,exposure_time,nModels=1,psf=
         return -np.inf
 
 
-### MCMC
+################################################################################
+# Single-Model (fixed sersic index)
+################################################################################
 def lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
     r"""
 
@@ -169,6 +339,7 @@ def lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
         model = simulation.generate_sersic_model(image.shape,\
                     (xc,yc,mag,radius,1.0,axis_ratio,position_angle),\
                     mag_zeropoint,exposure_time)
+        warnings.warn("No lensing parameters provided. Distortion not performed.")
     else:
         model = simulation.generate_lensed_sersic_model(image.shape,\
                     (xc,yc,mag,radius,1.0,axis_ratio,position_angle),\
@@ -177,6 +348,8 @@ def lnlikelihood(pars,image,sigma,mag_zeropoint,exposure_time,psf,lensingPars):
     if psf is not None:
         model = fftconvolve(model,psf,mode="same")
         # model = convolve_fft(model,self.psf)
+    else:
+        warnings.warn("No PSF provided. Convolution not performed.")
 
     N,M = model.shape
     x,y = np.meshgrid(range(N),range(M))
@@ -204,7 +377,7 @@ def prior(pars,shape):
     if  (N/4<pars[0]<3*N/4) and\
         (M/4<pars[1]<3*M/4) and\
         (0<pars[2]<=35) and\
-        (1e-3<=pars[3]<=10) and\
+        (1e-3<=pars[3]<=20) and\
         (0.1<=pars[4]<=1) and\
         (-90<=pars[5]<=90):
         return 0.0
@@ -763,7 +936,7 @@ class Galaxy(object):
         else:
             sampler = emcee.PTSampler(ntemps,nwalkers, ndim, lnprobability,prior,\
                     loglargs=(masked_image, masked_sigma,mag_zeropoint,\
-                              exposure_time),\
+                              exposure_time, self.psf,lensingPars),\
                     logpargs=(masked_image.shape,),threads=threads)
             sampler.run_mcmc([pos]*ntemps, nsamples)
 
@@ -784,7 +957,7 @@ class Galaxy(object):
         return samples.T
 
 
-    def emcee_fit_MP(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=20,nsamples=10000,plot=False,threads=1,ntemps=None):
+    def emcee_fit_MP(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=100,nsamples=5000,nexclude=None,plot=False,threads=1,ntemps=None):
         r"""
 
         Parameters
@@ -800,14 +973,19 @@ class Galaxy(object):
         --------
 
         """
-        nexclude = nsamples//2
+
+        if nexclude is None:
+            nexclude = nsamples//2
+        if nexclude > nsamples:
+            raise ValueError("nexclude cannot be greater than nsamples.")
+
         nModels = (len(initPars)-1)//7
         modelPars = SersicParameters(initPars[-1])
 
         masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
         masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
 
-        ndim, nwalkers = len(initPars), nchain * nModels
+        ndim, nwalkers = len(initPars), nchain
 
         sigmaPars = modelPars.get_sigma(nModels)
         if len(sigmaPars) != len(initPars):
@@ -818,18 +996,18 @@ class Galaxy(object):
 
         ## Standardize random starting points to be within accepted ranges
         for i in range(nModels):
-            pos[:,0+7*i][pos[:,0]<0]=1
-            pos[:,0+7*i][pos[:,0]>self.cutout.shape[0]]=self.cutout.shape[0]-1
-            pos[:,1+7*i][pos[:,1]<0]=1
-            pos[:,1+7*i][pos[:,1]>self.cutout.shape[1]]=self.cutout.shape[1]-1
-            pos[:,3+7*i][pos[:,3]<0.5]=0.5
-            pos[:,3+7*i][pos[:,3]>50]=50
-            pos[:,4+7*i][pos[:,4]<0.1]=0.1
-            pos[:,4+7*i][pos[:,4]>10]=10.0
-            pos[:,5+7*i][pos[:,4]<0.1]=0.1
-            pos[:,5+7*i][pos[:,4]>1]=1.0
-            pos[:,6+7*i][pos[:,5]>90]-=180
-            pos[:,6+7*i][pos[:,5]<-90]+=180
+            pos[:,0+7*i][pos[:,0+7*i]<0]=1
+            pos[:,0+7*i][pos[:,0+7*i]>self.cutout.shape[0]]=self.cutout.shape[0]-1
+            pos[:,1+7*i][pos[:,1+7*i]<0]=1
+            pos[:,1+7*i][pos[:,1+7*i]>self.cutout.shape[1]]=self.cutout.shape[1]-1
+            pos[:,3+7*i][pos[:,3+7*i]<0.5]=0.5
+            pos[:,3+7*i][pos[:,3+7*i]>50]=50
+            pos[:,4+7*i][pos[:,4+7*i]<0.1]=0.1
+            pos[:,4+7*i][pos[:,4+7*i]>N_MAX]=N_MAX-0.1
+            pos[:,5+7*i][pos[:,5+7*i]<0.1]=0.1
+            pos[:,5+7*i][pos[:,5+7*i]>1]=1.0
+            pos[:,6+7*i][pos[:,6+7*i]>90]-=180
+            pos[:,6+7*i][pos[:,6+7*i]<-90]+=180
 
         tstart = time.time()
 
@@ -837,12 +1015,12 @@ class Galaxy(object):
             sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability_MP,\
                         args=(masked_image, masked_sigma,mag_zeropoint,\
                               exposure_time,nModels,self.psf,lensingPars),\
-                        threads=threads,a=2.4)
+                        threads=threads,a=0.25)
             sampler.run_mcmc(pos, nsamples)
         else:
             sampler = emcee.PTSampler(ntemps,nwalkers, ndim, lnprobability_MP,prior_MP,\
                     loglargs=(masked_image, masked_sigma,mag_zeropoint,\
-                              exposure_time,nModels),\
+                              exposure_time,nModels,self.psf,lensingPars),\
                     logpargs=(masked_image.shape,nModels),threads=threads)
             sampler.run_mcmc([pos]*ntemps, nsamples)
 
@@ -851,8 +1029,8 @@ class Galaxy(object):
         print("\tMean acceptance fraction: %.3f"%(np.mean(sampler.acceptance_fraction)))
         if plot is True:
             labels = [r"$x_c$",r"$y_c$",r'$mag$',\
-                      r'$r_e\ [\mathrm{arcsec}]$',r"$n$",r"$(b/a)$",\
-                      r"$\theta_\mathrm{PA}$"]*nModels + ["sky"]
+                      r'$r_e$',r"$n$",r"$q$",\
+                      r"$\theta$"]*nModels + ["sky"]
             print(labels)
             plot_results(sampler,labels,ntemps=ntemps)
 
@@ -862,6 +1040,93 @@ class Galaxy(object):
             samples = sampler.chain[:, nexclude:, :].reshape((-1, ndim))
 
         return samples.T
+
+
+    def emcee_fit_LensedSersicPSF(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=100,nsamples=5000,nexclude=None,plot=False,threads=1,ntemps=None):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
+
+        if nexclude is None:
+            nexclude = nsamples//2
+        if nexclude > nsamples:
+            raise ValueError("nexclude cannot be greater than nsamples.")
+
+        modelPars = SersicPSFParameters(initPars[-1])
+
+        masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
+        masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
+
+        ndim, nwalkers = len(initPars), nchain
+
+        sigmaPars = modelPars.get_sigma(1)
+
+        pos = np.array([np.random.normal(initPars,sigmaPars) for i in range(nwalkers)])
+
+        pos[:,0][pos[:,0]<0]=1
+        pos[:,0][pos[:,0]>self.cutout.shape[0]]=self.cutout.shape[0]-1
+        pos[:,1][pos[:,1]<0]=1
+        pos[:,1][pos[:,1]>self.cutout.shape[1]]=self.cutout.shape[1]-1
+        pos[:,2][pos[:,2]<0]=0.5
+        pos[:,3][pos[:,3]<0.5]=0.5
+        pos[:,3][pos[:,3]>50]=50
+        pos[:,4][pos[:,4]<0.1]=0.1
+        pos[:,4][pos[:,4]>N_MAX]=N_MAX-0.1
+        pos[:,5][pos[:,5]<0.1]=0.1
+        pos[:,5][pos[:,5]>1]=1.0
+        pos[:,6][pos[:,6]>90]-=180
+        pos[:,6][pos[:,6]<-90]+=180
+        pos[:,7][pos[:,7]<0]=1
+        pos[:,7][pos[:,7]>self.cutout.shape[0]]=self.cutout.shape[0]-1
+        pos[:,8][pos[:,8]<0]=1
+        pos[:,8][pos[:,8]>self.cutout.shape[1]]=self.cutout.shape[1]-1
+        pos[:,9][pos[:,9]<0]=0.5
+
+        tstart = time.time()
+
+        if ntemps is None:
+            sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability_LensedSersicPSF,\
+                        args=(masked_image, masked_sigma,mag_zeropoint,\
+                              exposure_time,self.psf,lensingPars),\
+                        threads=threads,a=1.5)
+            sampler.run_mcmc(pos, nsamples)
+        else:
+            sampler = emcee.PTSampler(ntemps,nwalkers, ndim, lnprobability_LensedSersicPSF,prior_LensedSersicPSF,\
+                    loglargs=(masked_image, masked_sigma,mag_zeropoint,\
+                              exposure_time,self.psf,lensingPars),\
+                    logpargs=(masked_image.shape),threads=threads)
+            sampler.run_mcmc([pos]*ntemps, nsamples)
+
+
+        print('\telapsed %.8f seconds'%(time.time()-tstart))
+        print("\tMean acceptance fraction: %.3f"%(np.mean(sampler.acceptance_fraction)))
+        if plot is True:
+            labels = [r"$x_c$",r"$y_c$",r'$mag$',\
+                      r'$r_e$',r"$n$",r"$q$",\
+                      r"$\theta$"] + [r"$x_{PSF}$",r"$y_{PSF}$",r'$I_{PSF}$'] +\
+                    ["sky"]
+            print(labels)
+            plot_results(sampler,labels,ntemps=ntemps)
+
+        if  ntemps is not None:
+            samples = sampler.chain[:,:, nexclude:, :].reshape((-1, ndim))
+        else:
+            samples = sampler.chain[:, nexclude:, :].reshape((-1, ndim))
+
+        return samples.T
+
 
 
     def montecarlo_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars,nRun = 10,verbose=False):
@@ -949,6 +1214,259 @@ class Galaxy(object):
 
         return modelChain
 
+    def chi2fit_lensed(self,initPars,mag_zeropoint,exposure_time,lensingPars,oversampling=5,nRun=2):
+
+        lensPars = LensPars(*lensingPars)
+        nModels = (len(initPars)-1)//7
+
+        modelPars = SersicParameters(initPars[-1])
+        sigmaPars = modelPars.get_sigma(nModels)
+        if len(sigmaPars) != len(initPars):
+            for i in range(len(sigmaPars),len(initPars)):
+                sigmaPars.append(1e-3)
+
+        xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = initPars[:7]
+        skyValue = initPars[-1]
+
+        sersicModel = LensedSersicModel(lensPars=lensPars,\
+                                        magZP=mag_zeropoint,\
+                                        psf=self.psf,\
+                                        OverSampling=oversampling)
+        skyModel = models.Const2D(amplitude = skyValue)
+        model = sersicModel+skyModel#+psfModel
+
+        if nModels>1:
+            for i in range(nModels-1):
+                sersicModel = LensedSersicModel(lensPars=lensPars,\
+                                                magZP=mag_zeropoint,\
+                                                psf=self.psf)
+
+                model += sersicModel
+
+        masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
+        masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
+
+        N,M = masked_image.shape
+        x,y = np.mgrid[:N,:M]
+
+        # print(f"{utils.CRED}Init Pars:{utils.CEND}",",".join([f"{utils.CRED}{m:12.2f}{utils.CEND}" for m in initPars]))
+
+        finalResults = np.zeros([model.parameters.size+1,nRun])
+        i=0
+        nbadFits = 0
+        while i<nRun and nbadFits<100*nRun:
+            initPos = np.random.normal(initPars,sigmaPars)
+            model.x_0_0 = initPos[0]
+            model.y_0_0 = initPos[1]
+            model.I_eff_0 = np.random.lognormal(np.log10(initPars[2]),1.5)
+            model.r_eff_0 = np.random.lognormal(np.log10(initPars[3]),1)
+            model.n_0 = 1#initPos[4]
+            # model.n_0.fixed = True
+            model.axratio_0 = initPos[5]
+            model.theta_0 = initPos[6]
+            model.amplitude_1 = initPars[-1]
+            if nModels ==2:
+                model.x_0_2 = initPos[7]
+                model.y_0_2 = initPos[8]
+                model.I_eff_2 = initPos[9]
+                model.r_eff_2 = initPos[10]
+                model.n_2 = initPos[11]
+                model.axratio_2 = initPos[12]
+                model.theta_2 = initPos[13]
+
+            # print(f"{utils.CBLUE}guess:{utils.CEND}",",".join([f"{utils.CBLUE}{m:12.2f}{utils.CEND}" for m in model.parameters]))
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", OptimizeWarning)
+                try:
+                    modelFit = fitterLSQ(model, x, y, masked_image, weights=masked_sigma,maxiter = 5000)
+                    nEvaluations = fitterLSQ.fit_info["nfev"]
+                    if nEvaluations < 50:
+                        nbadFits += 1
+                        continue
+                    chi = (1/masked_image.count())*np.ma.sum( (masked_image-modelFit(x,y))*(masked_image-modelFit(x,y))/(masked_sigma*masked_sigma))
+                    # print(f"{utils.CGREEN}final:{utils.CEND}",",".join([f"{utils.CGREEN}{m:12.2f}{utils.CEND}" for m in modelFit.parameters]),f"chi={chi:.3f}")
+                    finalResults[:-1,i] = modelFit.parameters
+                    finalResults[-1,i] = chi
+                    i+=1
+                except (RuntimeError,OptimizeWarning) as e:
+                    print(fitterLSQ.fit_info["nfev"])
+                    print(fitterLSQ.fit_info["message"])
+                    nbadFits += 1
+                    continue
+
+        # fig,ax = mpl.subplots(1,3,figsize=(20,10))
+        # fig.subplots_adjust(wspace=0)
+        # ax[0].imshow(masked_image)
+        # ax[1].imshow(modelFit(x,y))
+        # ax[2].imshow(masked_image-modelFit(x,y),cmap="RdYlGn")
+        return finalResults
+
+
+    def chi2fit_sersicPSFlensed(self,initPars,mag_zeropoint,exposure_time,lensingPars,oversampling=5,nRun=2,debug=False):
+
+        lensPars = LensPars(*lensingPars)
+
+        modelPars = SersicParameters(initPars[-1])
+        sigmaPars = modelPars.get_sigma(1)
+        if len(sigmaPars) != len(initPars):
+            for i in range(len(sigmaPars),len(initPars)):
+                sigmaPars.append(1e-3)
+
+        xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = initPars[:7]
+        skyValue = initPars[-1]
+
+        print("LensPars input:", lensPars)
+        sersicModel = LensedSersicPSFModel(lensPars=lensPars,\
+                                        magZP=mag_zeropoint,\
+                                        psf=self.psf,\
+                                        OverSampling=oversampling)
+        skyModel = models.Const2D(amplitude = skyValue)
+        model = sersicModel+skyModel
+
+        masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
+        masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
+
+        N,M = masked_image.shape
+        x,y = np.mgrid[:N,:M]
+
+
+        finalResults = np.zeros([model.parameters.size+1,nRun])
+        i=0
+        nbadFits = 0
+        # print(f"{utils.CRED}Init Pars:{utils.CEND}",",".join([f"{utils.CRED}{m:12.2f}{utils.CEND}" for m in initPars]))
+
+        while i<nRun and nbadFits<100*nRun:
+            initPos = np.random.normal(initPars,sigmaPars)
+            model.x_0_0 = initPos[0]
+            model.y_0_0 = initPos[1]
+            model.I_eff_0 = np.random.lognormal(np.log10(initPars[2]),1.5)
+            model.r_eff_0 = np.random.lognormal(initPars[3],1)
+            model.n_0 = 1.0#np.random.lognormal(initPars[4],0.5)
+            # model.n_0.fixed = True
+            model.axratio_0 = initPos[5]
+            model.theta_0 = initPos[6]
+
+            initPos = np.random.normal(initPars[7:9],sigmaPars[:2])
+            model.xPSF_0 = initPos[0]
+            model.yPSF_0 = initPos[1]
+            model.I_psf_0 = np.abs(np.random.normal(initPars[9],5))
+
+            model.amplitude_1 = initPars[-1]#np.random.normal(initPars[10],0.1)
+            # model.amplitude_1.fixed=True
+
+
+            # print(f"{utils.CBLUE}guess:{utils.CEND}",",".join([f"{utils.CBLUE}{m:12.2f}{utils.CEND}" for m in model.parameters]))
+
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", OptimizeWarning)
+                try:
+                    modelFit = fitterLSQ(model, x, y, masked_image, weights=masked_sigma, maxiter = 5000)
+                    # modelFit = fitterLSQ(model, x, y, masked_image, maxiter = 5000)
+                    nEvaluations = fitterLSQ.fit_info["nfev"]
+                    if nEvaluations < 50 or modelFit.I_eff_0 == 0 or modelFit.I_psf_0 == 0:
+                        nbadFits += 1
+                        continue
+
+                    chi = (1/masked_image.count())*np.ma.sum( (masked_image-modelFit(x,y))*(masked_image-modelFit(x,y))/(masked_sigma*masked_sigma))
+                    # print(f"{utils.CGREEN}final:{utils.CEND}",",".join([f"{utils.CGREEN}{m:12.2f}{utils.CEND}" for m in modelFit.parameters]),f"chi={chi:.3f}")
+                    finalResults[:-1,i] = modelFit.parameters
+                    finalResults[-1,i] = chi
+                    i+=1
+                except (RuntimeError,OptimizeWarning) as e:
+                    print(fitterLSQ.fit_info["nfev"])
+                    print(fitterLSQ.fit_info["message"])
+                    nbadFits += 1
+                    continue
+
+        print(f"Acceptance rate: {i/(i+nbadFits):.3f}")
+
+        # fig,ax = mpl.subplots(1,3,figsize=(20,10))
+        # fig.subplots_adjust(wspace=0)
+        # ax[0].imshow(masked_image)
+        # ax[1].imshow(modelFit(x,y))
+        # ax[2].imshow(masked_image-modelFit(x,y),cmap="RdYlGn")
+        return finalResults
+
+    def gridSearch_sersicPSFlensed(self,initPars,mag_zeropoint,exposure_time,lensingPars,oversampling=5,nRun=2):
+
+        # lensPars = LensPars(*lensingPars)
+        #
+        # modelPars = SersicParameters(initPars[-1])
+        # sigmaPars = modelPars.get_sigma(1)
+        # if len(sigmaPars) != len(initPars):
+        #     for i in range(len(sigmaPars),len(initPars)):
+        #         sigmaPars.append(1e-3)
+        #
+        # xc,yc,mag,radius,sersic_index,axis_ratio,position_angle = initPars[:7]
+        # skyValue = initPars[-1]
+        #
+        # print("LesnPars input:", lensPars)
+        # sersicModel = LensedSersicPSFModel(lensPars=lensPars,\
+        #                                  magZP=mag_zeropoint,\
+        #                                  psf=self.psf,\
+        #                                  OverSampling=oversampling)
+        # skyModel = models.Const2D(amplitude = skyValue)
+        # model = sersicModel+skyModel
+        #
+        # masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
+        # masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
+        #
+        # N,M = masked_image.shape
+        # x,y = np.mgrid[:N,:M]
+        #
+        #
+        # finalResults = np.zeros([model.parameters.size,nRun])
+        # i=0
+        # nbadFits = 0
+        # print(f"{utils.CRED}Init Pars:{utils.CEND}",",".join([f"{utils.CRED}{m:12.2f}{utils.CEND}" for m in initPars]))
+        #
+        # while i<nRun and nbadFits<100*nRun:
+        #     initPos = np.random.normal(initPars,sigmaPars)
+        #     model.x_0_0 = initPos[0]
+        #     model.y_0_0 = initPos[1]
+        #     model.I_eff_0 = np.random.lognormal(np.log10(initPars[2]),1.5)
+        #     model.r_eff_0 = np.random.lognormal(initPars[3],1)
+        #     model.n_0 = np.random.lognormal(initPars[4],0.5)
+        #     model.axratio_0 = np.random.uniform(0.1,1)
+        #     model.theta_0 = initPos[6]
+        #     model.amplitude_1 = initPos[-1]
+        #
+        #     initPos = np.random.normal(initPars[7:9],sigmaPars[:2])
+        #     model.xPSF_0 = initPos[0]
+        #     model.yPSF_0 = initPos[1]
+        #     model.I_psf_0 = np.abs(np.random.normal(initPars[9],5))
+        #
+        #
+        #     print(f"{utils.CBLUE}guess:{utils.CEND}",",".join([f"{utils.CBLUE}{m:12.2f}{utils.CEND}" for m in model.parameters]))
+        #
+        #
+        #     with warnings.catch_warnings():
+        #         warnings.simplefilter("error", OptimizeWarning)
+        #         try:
+        #             modelFit = fitterLSQ(model, x, y, masked_image, weights=masked_sigma, maxiter = 5000)
+        #             nEvaluations = fitterLSQ.fit_info["nfev"]
+        #             if nEvaluations < 50:
+        #                 nbadFits += 1
+        #                 continue
+        #
+        #             # fig,ax=mpl.subplots()
+        #             # ax.imshow(modelFit(x,y))
+        #             # ax.set_title(r"$I_\mathrm{eff}=%.2f,\ I_\mathrm{psf}=%.2f$"%(modelFit.I_eff_0.value,modelFit.I_psf_0.value))
+        #             print(f"{utils.CGREEN}final:{utils.CEND}",",".join([f"{utils.CGREEN}{m:12.2f}{utils.CEND}" for m in modelFit.parameters]))
+        #             finalResults[:,i] = modelFit.parameters
+        #             i+=1
+        #         except (RuntimeError,OptimizeWarning) as e:
+        #             print(fitterLSQ.fit_info["nfev"])
+        #             print(fitterLSQ.fit_info["message"])
+        #             nbadFits += 1
+        #             continue
+        #
+        # print(f"Acceptance rate: {i/(i+nbadFits):.3f}")
+
+        return finalResults
+
 
 
 def plot_results(sampler,pars,ntemps=None):
@@ -993,12 +1511,15 @@ def plot_results(sampler,pars,ntemps=None):
         for j in range(ntemps):
             for i in range(nwalkers):
                 ax[n].plot(chain[j,i,:,n],alpha=0.35,color=ColorsTemps[j],lw=0.5)
-                ax[n].set_ylabel(pars[n])
-            ax[NP+n].hist(flatChain[j,:,n],bins=50,orientation='horizontal',color='silver',histtype='stepfilled')
+                ax[n].set_ylabel(pars[n],fontsize=16)
+            # ax[NP+n].hist(flatChain[j,:,n],bins=50,orientation='horizontal',color='silver',histtype='stepfilled')
+        # print(flatChain.shape,flatChain[:,:,n].shape,flatChain[:,:,n].T.shape)
+        ax[NP+n].hist(flatChain[:,:,n].T,bins=50,orientation='horizontal',color=ColorsTemps[:ntemps], histtype='bar', stacked=True)
         if n<(NP-1):
             ax[n].tick_params(labelbottom='off')
             ax[NP+n].tick_params(labelbottom='off')
-        ax[NP+n].tick_params(labelleft='off')
+        ax[NP+n].tick_params(labelleft='off',labelsize=14)
+        ax[n].tick_params(labelsize=12)
 
     ax[NP-1].set_xlabel(r'$N_\mathrm{step}$')
     ax[-1].set_xlabel(r'$N_\mathrm{sol}$')
