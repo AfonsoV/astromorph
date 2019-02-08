@@ -30,17 +30,17 @@ def load_data(image,ra,dec,hsize):
         hdu.close()
     except IndexError as err:
         if args.verbose:
-            print err
+            print(err)
         image_stamp=np.zeros([hsize*2,hsize*2])
-        
-    return image_stamp        
+
+    return image_stamp
 
 def define_structure(size):
     structure = np.zeros([size,size])
     dmat,d= mi.distance_matrix(size/2.-0.5,size/2.-0.5,structure)
     structure[dmat<size/2]=1
     return structure
-        
+
 
 def compute_fraction_area(image,segmap,frac,flux_sampling=1000,draw_ax=None):
     total_flux = np.sum(image[segmap==1])
@@ -48,31 +48,31 @@ def compute_fraction_area(image,segmap,frac,flux_sampling=1000,draw_ax=None):
     min_flux = np.amin(image[segmap==1])
 
     total_pix = np.size(segmap[segmap==1])
-    
+
     flux_step = (max_flux-min_flux)/flux_sampling
 
     area_flux=0
     thresh_flux=max_flux
     npix_flux=0
     while area_flux < frac*total_flux:
-        
+
         area_flux = np.sum(image[(segmap==1)*(image>=thresh_flux)])
-        npix_flux = np.size(image[(segmap==1)*(image>=thresh_flux)])     
-        
+        npix_flux = np.size(image[(segmap==1)*(image>=thresh_flux)])
+
         if draw_ax!=None:
-            draw_ax.plot([thresh_flux],[npix_flux],'r.',mec='red')  
+            draw_ax.plot([thresh_flux],[npix_flux],'r.',mec='red')
         thresh_flux -= flux_step
-        
-    if draw_ax!=None:  
+
+    if draw_ax!=None:
         draw_ax.set_xlabel(r'$f_t\ [\mathrm{e^{-}/s}]$')
         draw_ax.set_ylabel(r'$N_\mathrm{pix}(f>f_t)$')
     return npix_flux,total_pix,thresh_flux,total_flux
 
 
 
-    
+
 def compute_size(image,ra,dec,hsize,threshold,fractions,size=6,safedist=1.0):
-    
+
     Sizes = np.zeros(len(fractions)+1)
     Fluxes = np.zeros(len(fractions)+1)
 
@@ -81,11 +81,11 @@ def compute_size(image,ra,dec,hsize,threshold,fractions,size=6,safedist=1.0):
         return Sizes - 99,-9
 
     dilate = define_structure(size)
-    
-    segmap = mi.gen_segmap_tresh(image_stamp,hsize,hsize,k_sky=args.ksky,thresh=threshold,Amin=args.areamin,pixscale= args.pixscale,all_detection=True)    
+
+    segmap = mi.gen_segmap_tresh(image_stamp,hsize,hsize,k_sky=args.ksky,thresh=threshold,Amin=args.areamin,pixscale= args.pixscale,all_detection=True)
     single_source_map = mi.select_object_map(hsize,hsize,segmap,pixscale=args.pixscale)
-    image_stamp,single_source_map,imglag,segflag = mi.image_validation(image_stamp,single_source_map,args.pixscale,safedist)    
-    
+    image_stamp,single_source_map,imglag,segflag = mi.image_validation(image_stamp,single_source_map,args.pixscale,safedist)
+
     if segflag==1:
         return Sizes - 99,segflag
 
@@ -98,18 +98,18 @@ def compute_size(image,ra,dec,hsize,threshold,fractions,size=6,safedist=1.0):
         Sizes[i],TotalArea,Fluxes[i],TotalFlux = compute_fraction_area(image_stamp,dilated_map,fractions[i])
     Sizes[i+1]=TotalArea
     Fluxes[i+1]=TotalFlux
-    
+
     if args.nosaving:
         mpl.rcParams['image.cmap']='gist_stern_r'
-        segmap[segmap!=0]/=1    
+        segmap[segmap!=0]/=1
         fig,ax=mpl.subplots(2,3,figsize=(20.6,12))
         mpl.subplots_adjust(wspace=0.2,hspace=0.02)
         ax=ax.reshape(np.size(ax))
         ax[0].imshow(np.sqrt(np.abs(image_stamp)),cmap='hot')
         mi.gen_circle(ax[1],hsize,hsize,hsize*(2*np.sqrt(2)*0.5/args.size),color='red')
-        ax[1].imshow(segmap)   
+        ax[1].imshow(segmap)
         ax[2].imshow(single_source_map)
-    
+
         flux_map = np.zeros(image_stamp.shape)
         flux_map[dilated_map==1]=3
         for j in range(len(Fluxes)-2,-1,-1):
@@ -121,29 +121,29 @@ def compute_size(image,ra,dec,hsize,threshold,fractions,size=6,safedist=1.0):
         ax[3].text(10,7.5,'50',color='white',va='center',ha='center',weight='heavy')
         ax[3].text(8.5,5.5,'80',color='white',va='center',ha='center',weight='heavy')
         ax[3].text(6,3,'100',color='white',va='center',ha='center',weight='heavy')
-    
-    
+
+
 #        masked_neighbours = mi.sci_nd.binary_dilation(segmap - single_source_map,structure=dilate)
         compute_fraction_area(image_stamp,dilated_map,1.0,flux_sampling=500,draw_ax=ax[4])
-    
+
         ax[5].imshow(dilated_map)
-    
+
         for i in range(len(ax)):
             if i!=4:
                 ax[i].set_xticks([])
                 ax[i].set_yticks([])
-    
+
         fig.text(0.95,0.50,r'$\curvearrowright$',va='center',ha='center',weight='heavy',rotation=-90,fontsize=150)
-#        fig.savefig('size_thresholding_example.png')      
+#        fig.savefig('size_thresholding_example.png')
         def exit_code(event):
             if event.key=='escape':
                 sys.exit()
             if event.key=='q':
                 mpl.close('all')
-                
+
         fig.canvas.mpl_connect('key_press_event',exit_code)
         mpl.show()
-        
+
 
     return Sizes,segflag
 
@@ -173,13 +173,13 @@ if __name__=='__main__':
     samplecat = args.catalog
     match_tiles = args.tilesmatch
     startid=args.ident
-    
+
     colnumbers=find_columns(samplecat)
     ID,RA,DEC,Z,Zflag = np.loadtxt(samplecat,unpack=True,dtype={'names':('a','b','c','d','e'),'formats':('i8','f4','f4','f4','i4')},usecols=colnumbers)
     hsize = int(args.size/args.pixscale)/2
-    
+
     fractions = [np.float32(f) for f in args.fractions.split(',')]
-    
+
     check= np.array(['band' in i for i in fieldimg.split('/')])
     if 'CFHTLS' in fieldimg:
         band = string.upper(fieldimg.split('_')[-4])+'band'
@@ -187,7 +187,7 @@ if __name__=='__main__':
     else:
         index = np.where(check==True)[0]
         band= fieldimg.split('/')[index]
-    
+
     field = fieldimg.split('/')[index-1]
     survey = fieldimg.split('/')[index-2]
     if survey =='..':
@@ -197,7 +197,7 @@ if __name__=='__main__':
         prefix='no_dilation_'
     else:
         prefix=''
-        
+
     if args.fixthresh:
         mode = 'fixthresh'
         Tmode = args.threshold
@@ -207,18 +207,18 @@ if __name__=='__main__':
 
     if args.nosaving:
         if args.verbose:
-            print "WARNING: Not saving results to table!"
+            print("WARNING: Not saving results to table!")
         pass
     else:
         table_name= "saved_tables/%ssizes_nonparametric_%s_%s_%s_%s_%.2f.txt"%(prefix,survey,field,band,mode,Tmode)
         if args.verbose:
-            print "Saving results to %s"%table_name
+            print("Saving results to %s"%table_name)
         table_out = open(table_name,"w")
-            
+
         table_out.write("#ID\tRA\tDEC\tZ\tZflag\t")
-        table_out.write("\t".join(["T_%i[pix]"%(round(f*100.0,0)) for f in fractions]))    
-        table_out.write("\tT_100[pix]\t")    
-        table_out.write("\t".join(["T_%i[kpc]"%(round(f*100.0,0)) for f in fractions]))    
+        table_out.write("\t".join(["T_%i[pix]"%(round(f*100.0,0)) for f in fractions]))
+        table_out.write("\tT_100[pix]\t")
+        table_out.write("\t".join(["T_%i[kpc]"%(round(f*100.0,0)) for f in fractions]))
         table_out.write("\tT_100[kpc]\tSegFlag\n")
 
     start=0
@@ -229,29 +229,29 @@ if __name__=='__main__':
             continue
         else:
             start=1
-           
-        if args.verbose:        
-            print "---------------------------------------------------------> VUDS %i <---------------------------------------------------------"%ID[i]
+
+        if args.verbose:
+            print("---------------------------------------------------------> VUDS %i <---------------------------------------------------------"%ID[i])
         if match_tiles == None:
             imgname = fieldimg
         else:
-            tilename=sp.check_output("awk '$1==%s {print $2}' %s"%(ID[i],match_tiles),shell=True)
+            tilename=sp.check_output("awk '$1==%s {print($2}' %s"%(ID[i],match_tiles),shell=True)
             try:
                 tilename=tilename.split()[0]
             except IndexError as err:
                 if args.verbose:
-                    print err
+                    print(err)
                 continue
             imgname ='%s/%s'%(fieldimg,tilename)
-        
+
         if args.fixthresh:
-            t = args.threshold       
+            t = args.threshold
         else:
             sigma_0=args.sigma0
             t = sigma_0 * ((1+Z[i])/(1+4.0))**(-3)
         galaxy_sizes,segflag = compute_size(imgname,RA[i],DEC[i],hsize,t,fractions)
- 
-        
+
+
 
 
         da=cosmos.angular_distance(Z[i],pars=None)*1000
@@ -259,26 +259,22 @@ if __name__=='__main__':
         galaxy_physic_sizes[galaxy_physic_sizes<0] = -99.0
 
         if args.verbose:
-            print """ threshold = %8.4f @ z = %.3f d_a=%.3f Mpc
+            print(""" threshold = %8.4f @ z = %.3f d_a=%.3f Mpc
             Pixel  Sizes %s
-            Physic Sizes %s 
-            Segmentation Flag %i 
-            """%(t,Z[i],da/1000.,"\t".join(["%10.5f"%(s) for s in galaxy_sizes]),"\t".join(["%10.5f"%(s) for s in galaxy_physic_sizes]) ,segflag )
-            
+            Physic Sizes %s
+            Segmentation Flag %i
+            """%(t,Z[i],da/1000.,"\t".join(["%10.5f"%(s) for s in galaxy_sizes]),"\t".join(["%10.5f"%(s) for s in galaxy_physic_sizes]) ,segflag ))
+
         if not args.nosaving:
             table_out.write("%10i\t%12.8f\t%12.8f\t%5.3f\t%2i\t"%(ID[i],RA[i],DEC[i],Z[i],Zflag[i]))
             table_out.write("\t".join(["%10.5f"%(s) for s in galaxy_sizes]))
             table_out.write("\t")
-            table_out.write("\t".join(["%10.5f"%(s) for s in galaxy_physic_sizes]))  
+            table_out.write("\t".join(["%10.5f"%(s) for s in galaxy_physic_sizes]))
             table_out.write("\t%i\n"%segflag)
-            
+
         if args.verbose:
-            print "-------------------------------------------------------------------------------------------------------------------------------------"%ID[i] 
-        
+            print("-------------------------------------------------------------------------------------------------------------------------------------"%ID[i])
+
 
     if not args.nosaving:
         table_out.close()
-
-
-
-

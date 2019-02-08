@@ -6,7 +6,7 @@ Created on Wed Jul 16 12:32:00 2014
 
 Code to process a sample of galaxies in a given field and provide a table with the results from non-parametric analysis.
 21/07/2014  - First complete functional code without any fatal errors on execution
-23/07/2014  - Note the angle correction and the switch of x and y positions in the computation of 
+23/07/2014  - Note the angle correction and the switch of x and y positions in the computation of
             r_petrosian and C due to the orientation of numpy np.arrays with respect to the image orientation
 """
 
@@ -29,16 +29,16 @@ class Galaxy:
         dmat,d= distance_matrix(SIZE/2.-0.5,SIZE/2.-0.5,self.structure)
         self.structure[dmat<SIZE/2]=1
 
-    
+
     def color_correction(self,threshold,color):
         ColorCorretion = 10**(0.4*(color))
         thresh_corrected = threshold*ColorCorretion
         if args.verbose:
             print("Color Correction Term: %.5f"%ColorCorretion)
             print("Old Threshold: %.4f, New Threshold: %.4f"%(threshold,thresh_corrected))
-        
+
         return thresh_corrected
-    
+
     def load_segmap(self,image,safedist=1.0):
 
         sky_med,sky_std = sky_value(image,args.ksky)
@@ -46,8 +46,8 @@ class Galaxy:
         if args.nodilation:
             image_stamp = sci_nd.gaussian_filter(image,sigma=1.0)
 
-        
-        if np.abs(self.color)<10:    
+
+        if np.abs(self.color)<10:
             corrected_thresh = self.color_correction(self.thresh,self.color)
 #            new_sblimit = corrected_thresh*self.sblimit
             threshold=corrected_thresh
@@ -55,24 +55,24 @@ class Galaxy:
         else:
             threshold=self.thresh
             added_flag=0.5
-            
+
         self.used_threshold = threshold
         self.skyval = sky_med
         self.skystd = sky_std
-            
+
         segmap = gen_segmap_sbthresh(image_stamp-sky_med,self.hsize,self.hsize,self.sblimit,args.pixscale,thresh=threshold,Amin=args.areamin,all_detection=True)
         single_source_map = select_object_map_connected(self.hsize,self.hsize,image_stamp,segmap,pixscale=args.pixscale,radius=args.aperture)
-        image_stamp,single_source_map,imflag,segflag = image_validation(image_stamp,single_source_map,args.pixscale,safedist)    
+        image_stamp,single_source_map,imflag,segflag = image_validation(image_stamp,single_source_map,args.pixscale,safedist)
 
 
         segflag+=added_flag
-        
+
         mask = segmap.copy()
         mask[mask>0]=1
         mask = mask-single_source_map
-        
+
         return image,imflag,single_source_map,mask,segflag
-    
+
     def load_data(self,image,Xgal,Ygal):
         self.imagename=image
         hdu=pyfits.open(image)
@@ -85,20 +85,20 @@ class Galaxy:
 
         if self.imageflag==1:
             if args.verbose:
-                print "Mostly zero values in image data!"
+                print("Mostly zero values in image data!")
             self.nodata = True
             return
-        
+
         self.maskeddata=self.originalgaldata.copy()
         nmaskedvalues=len(self.maskeddata[self.mask==1])
         self.sky,self.std=sky_value(self.originalgaldata)
         self.maskeddata[self.mask==1]=npr.normal(self.sky,self.std,nmaskedvalues)
         sky_value(self.originalgaldata)[0]
         self.originalbarx,self.originalbary = barycenter(self.originalgaldata,self.originalsegmap)
-        
+
         self.galdata,self.segmap,self.center=make_stamps(self.originalbarx,self.originalbary,self.maskeddata,self.originalsegmap,pixscale=args.pixscale,fact=args.zoomfactor)
         self.barx,self.bary = self.center[1],self.center[0]
-        
+
         if args.nosaving:
             fig,ax=mpl.subplots(2,3)
             ax=ax.reshape(np.size(ax))
@@ -109,8 +109,8 @@ class Galaxy:
             ax[4].imshow(self.galdata)
             ax[5].imshow(self.segmap)
             mpl.show()
-        
-        
+
+
     def __init__(self,image,info_dict):
         self.ra = info_dict['RA']
         self.dec = info_dict['DEC']
@@ -123,17 +123,17 @@ class Galaxy:
         self.sblimit = info_dict['sblimit']
 
         self.define_structure()
-        try:        
+        try:
             self.Xoriginal, self.Yoriginal = get_center_coords(image,self.ra,self.dec,self.hsize)
             self.nodata=False
         except (IndexError,IOError) as err:
             if args.verbose:
-                print err
+                print(err)
             self.nodata=True
             return
-            
+
         self.load_data(image,self.Xoriginal,self.Yoriginal)
-        
+
         if self.nodata:
             return
         XX2,YY2,XY = moments(self.galdata,self.segmap)
@@ -146,8 +146,8 @@ class Galaxy:
             self.nodata=True
             return
         if args.verbose:
-            print "q=%.2f\ntheta=%.2f"%(self.axis_ratio,self.theta_sky)
-        
+            print("q=%.2f\ntheta=%.2f"%(self.axis_ratio,self.theta_sky))
+
     def __str__(self):
         S= "Object %i @ ra,dec=[%.4f,%4f] z=%.3f [%i]"%(self.ID,self.ra,self.dec,self.redshift,self.redshiftflag)
         S+= "\n\tDetected source at X=%.3f Y=%3f"%(self.Xoriginal,self.Yoriginal)
@@ -160,26 +160,26 @@ class Galaxy:
             return
 
         if args.verbose:
-            print "-------------------> Computing CAS!"
-            
+            print("-------------------> Computing CAS!")
+
         segmap_for_sky = gen_segmap_tresh(self.originalgaldata,self.hsize,self.hsize,thresh=3.0,Amin=5,k_sky=3,pixscale=args.pixscale,all_detection=True)
         self.sky_patch = extract_sky(self.originalgaldata,self.galdata.shape,segmap_for_sky)
 
 #        fig,ax=mpl.subplots()
 #        ax.imshow(self.sky_patch)
 #        mpl.show()
-        
+
         self.petrosianradius_circular,self.prcflag = CAS.petrosian_rad(self.maskeddata,self.originalbary,self.originalbarx,verbose=args.verbose)
         self.concentration_circular = CAS.CAS_C(self.maskeddata,self.originalbary,self.originalbarx,rp=self.petrosianradius_circular)[0]
         self.petrosianradius_elliptic,self.preflag  = CAS.petrosian_rad(self.maskeddata,self.originalbary,self.originalbarx,q=self.axis_ratio,ang=self.theta_sky,draw_stuff=args.checkrad,verbose=args.verbose)
         self.concentration_elliptic = CAS.CAS_C(self.maskeddata,self.originalbary,self.originalbarx,ba=self.axis_ratio,theta=self.theta_sky,rp=self.petrosianradius_elliptic)[0]
 
         if args.verbose:
-            print "Computed (C)oncetration           :\t C_c=%.3f, C_e=%.3f"%(self.concentration_circular,self.concentration_elliptic)
-        
+            print("Computed (C)oncetration           :\t C_c=%.3f, C_e=%.3f"%(self.concentration_circular,self.concentration_elliptic))
+
         self.asymmetry,self.Agalaxy,self.Asky = CAS.CAS_A(self.center,self.galdata,args.nskiesAsymm,self.maskeddata,segmap_for_sky)
         if args.verbose:
-            print "Computed (A)symmetry              :\t A=%.3f, Agal=%.3f, Asky=%.3f"%(self.asymmetry,self.Agalaxy,self.Asky)
+            print("Computed (A)symmetry              :\t A=%.3f, Agal=%.3f, Asky=%.3f"%(self.asymmetry,self.Agalaxy,self.Asky))
 
         if np.isinf(self.petrosianradius_elliptic) and np.isinf(self.petrosianradius_circular):
             rpS = 1.0
@@ -187,12 +187,12 @@ class Galaxy:
             rpS=self.petrosianradius_circular
         else:
             rpS = self.petrosianradius_elliptic
-            
+
 
         if np.ceil(0.3*rpS)<self.galdata.shape[0]:
             self.clumpiness,self.Sgalaxy,self.Ssky = CAS.CAS_S(self.galdata,self.barx,self.bary,0.3*rpS,self.sky_patch)
             self.clumpflag=0
-        else:            
+        else:
             sky_patch = extract_sky(self.originalgaldata,self.originalgaldata.shape,segmap_for_sky)
             self.clumpiness,self.Sgalaxy,self.Ssky = CAS.CAS_S(self.maskeddata,self.originalbarx,self.originalbary,0.3*rpS,sky_patch)
             self.clumpflag=1
@@ -201,81 +201,81 @@ class Galaxy:
 #            sky_patch = extract_sky(self.originalgaldata,galdata.shape,segmap_for_sky)
 #            barx,bary=center[1],center[0]
 #            self.clumpiness,self.Sgalaxy,self.Ssky = CAS.CAS_S(galdata,barx,bary,0.3*rpS,sky_patch)
-            
+
         if args.verbose:
-            print "Computed (S)Clumpiness            :\t S=%.3f, Sgal=%.3f, Ssky=%.3f"%(self.clumpiness,self.Sgalaxy,self.Ssky)
-            print "-------------------> Done computing CAS!"
-        
+            print("Computed (S)Clumpiness            :\t S=%.3f, Sgal=%.3f, Ssky=%.3f"%(self.clumpiness,self.Sgalaxy,self.Ssky))
+            print("-------------------> Done computing CAS!")
+
     def compute_GiniM20(self):
         if self.nodata:
             return
 
-        if args.verbose:            
-            print "-------------------> Computing Gini-M20!"
+        if args.verbose:
+            print("-------------------> Computing Gini-M20!")
         self.gini=gm20.Gini(self.galdata,self.segmap)
-        if args.verbose:        
-            print "Computed (G)ini                   :\t G=%.3f"%self.gini
+        if args.verbose:
+            print("Computed (G)ini                   :\t G=%.3f"%self.gini)
         self.momentlight20,self.m20flag = gm20.MomentLight20(self.galdata,self.segmap,self.barx,self.bary,verbose=args.verbose)
-        if args.verbose:        
-            print "Computed (M20)Moment of 20%% light :\t M20=%.3f"%self.momentlight20
-            print "-------------------> Done computing Gini-M20!"
-    
+        if args.verbose:
+            print("Computed (M20)Moment of 20%% light :\t M20=%.3f"%self.momentlight20)
+            print("-------------------> Done computing Gini-M20!")
+
     def compute_MID(self):
         if self.nodata:
             return
         if args.verbose:
-            print "-------------------> Computing MID!"
+            print("-------------------> Computing MID!")
         Rs,Qs = MID.multimode(self.galdata,self.segmap)
         self.multimode = max(Rs)
         self.multimode_percentile = Qs[Rs==max(Rs)][0]
         if args.verbose:
-            print "Computed (M)ultimode              :\t M=%.3f"%self.multimode
+            print("Computed (M)ultimode              :\t M=%.3f"%self.multimode)
         IntensityMap,LocalMaxima = MID.local_maxims(self.galdata,self.segmap)
         self.intensity,self.intensity_center =MID.intensity(self.galdata,IntensityMap,self.segmap,LocalMaxima)
         if args.verbose:
-            print "Computed (I)ntensity              :\t I=%.3f"%self.intensity
+            print("Computed (I)ntensity              :\t I=%.3f"%self.intensity)
         self.deviation = MID.deviation(self.galdata,self.segmap,self.intensity_center)
         if args.verbose:
-            print "Computed (D)eviation              :\t D=%.3f"%self.deviation
-            print "-------------------> Done computing MID!"
-        
+            print("Computed (D)eviation              :\t D=%.3f"%self.deviation)
+            print("-------------------> Done computing MID!")
+
     def compute_PsiTXi(self):
         if self.nodata:
             return
         if args.verbose:
-            print "-------------------> Computing TPsiXi!"
+            print("-------------------> Computing TPsiXi!")
         self.size = TMC.Size(self.segmap,args.pixscale,self.redshift)
         if args.verbose:
-            print "Computed (T)Size                  :\t T=%.3f"%(self.size)
+            print("Computed (T)Size                  :\t T=%.3f"%(self.size))
         self.multiplicity = TMC.Multiplicity(self.galdata,self.segmap)[0]
         if args.verbose:
-            print "Computed (Psi)Multiplicity        :\t Psi=%.3f"%(self.multiplicity)
+            print("Computed (Psi)Multiplicity        :\t Psi=%.3f"%(self.multiplicity))
 #        self.color_dispersion = TMC.color_dispersion()
         self.color_dispersion = -9.999
         if args.verbose:
-            print "Computed (Xi)ColorDispersion      :\t Xi=%.3f"%self.color_dispersion
+            print("Computed (Xi)ColorDispersion      :\t Xi=%.3f"%self.color_dispersion)
 #        #Needed Way of implementation of the Color Dispersion secondary image
 
         if args.verbose:
-            print "-------------------> Done computing TPsiXi!" 
-        
+            print("-------------------> Done computing TPsiXi!")
+
     def compute_filamentarity(self):
         if self.nodata:
             return
         if args.verbose:
-            print "-------------------> Computing Additional Parameters!"
+            print("-------------------> Computing Additional Parameters!")
         self.filamentarity = ADD.filamentarity(self.segmap)
         if args.verbose:
-            print "Computed Filamentarity            :\t F=%.3f"%(self.filamentarity)
-            print "-------------------> Done computing Filamentarity!"
-    
-    
+            print("Computed Filamentarity            :\t F=%.3f"%(self.filamentarity))
+            print("-------------------> Done computing Filamentarity!")
+
+
     def write_line_results(self,filepointer):
         if self.nodata:
             filepointer.write("%10i\t%12.8f\t%12.8f\t%7.4f\t%4i\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\t-99.0\n"%(self.ID,self.ra,self.dec,self.redshift,self.redshiftflag))
         else:
             filepointer.write("%10i\t%12.8f\t%12.8f\t%7.4f\t%4i\t"%(self.ID,self.ra,self.dec,self.redshift,self.redshiftflag))
-            filepointer.write("%7.4f\t%7.4f\t"%(self.axis_ratio,self.theta_sky))       
+            filepointer.write("%7.4f\t%7.4f\t"%(self.axis_ratio,self.theta_sky))
             filepointer.write("%7.4f\t%7.4f\t%7.4f\t%7.4f\t"%(self.petrosianradius_circular,self.concentration_circular,self.petrosianradius_elliptic,self.concentration_elliptic))
             filepointer.write("%7.4f\t%7.4f\t"%(self.Agalaxy,self.clumpiness))
             filepointer.write("%7.4f\t%7.4f\t"%(self.gini,self.momentlight20))
@@ -286,7 +286,7 @@ class Galaxy:
             filepointer.write("%7.4f\t%12.8f\t%12.8f"%(self.used_threshold,self.skyval,self.skystd))
 
             filepointer.write("\n")
-        
+
 #def get_focus(focus_table,name):
 #    """"Function helper to get focus value for psf grab"""
 #    f=open(focus_table)
@@ -300,11 +300,11 @@ class Galaxy:
 #        else:
 #            continue
 #    return focus
-# 
+#
 #def dist2(x1,y1,x2,y2):
 #    "Computes the distance between two points with coordinates (x1,y1) and (x2,y2)"
 #    return ((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2))
-#    
+#
 #def get_sex_pars(xc,yc,rmax,catfile='test.cat',psf=False):
 #    """Returns the SExtractor parameters from the catalog associated with the
 #    segmentation map for the source closest to the VUDS catalog coordinates."""
@@ -314,7 +314,7 @@ class Galaxy:
 #    f.close()
 #
 #    last_line=txt[-1]
-#    if last_line[0]=='#':        
+#    if last_line[0]=='#':
 #        return -99,-99,-99,-99,-99,-99,-99,-99,-99,-99
 #
 #    if psf:
@@ -340,7 +340,7 @@ class Galaxy:
 #            return xp,yp,obj_num
 #        else:
 #            return xs,ys,mag,re,n,e,t,obj_num,np.sqrt(min(dists)),isoarea
-#            
+#
 #def select_PSF(ID,psfdir,focus,xc,yc,hsize=50):
 #    """Function helper to get psf image from focus value"""
 #    if focus<=-6.5:
@@ -355,7 +355,7 @@ class Galaxy:
 #        iraf.imarith("%s[%i:%i,%i:%i]"%(psf_img,X-hsize,X+hsize,Y-hsize,Y+hsize),'*',1.0,'psf.fits')
 #    else:
 #        iraf.imarith("%s[%i:%i,%i:%i]"%(psf_img,X-hsize,X+hsize,Y-hsize,Y+hsize),'*',1.0,'psf-%i.fits'%(args.ident))
-#    
+#
 #    return
 #
 #def get_center_coords(imgname,ra,dec):
@@ -369,7 +369,7 @@ class Galaxy:
 #    ctype=hdu[0].header["ctype1"]
 #    xmax=hdu[0].header["naxis1"]
 #    ymax=hdu[0].header["naxis2"]
-#    
+#
 #    if 'RA' in ctype:
 #        sky=np.array([[ra,dec]],np.float_)
 #    else:
@@ -393,7 +393,7 @@ def luminosity_evol(z,zbreak=3.0):
 
 def luminosity_evolution(z,zp=2.0,zbreak=3.0):
     return luminosity_evol(z)/luminosity_evol(zp)
-    
+
 def find_columns(catname,mag_colname,magref_colname):
     f = open(catname)
     header = f.readline().replace('#','')
@@ -405,13 +405,13 @@ def find_columns(catname,mag_colname,magref_colname):
     zcol = keys.index('z')
     zfcol = keys.index('zflags')
     magcol = keys.index(mag_colname)
-    
+
     magrefs=magref_colname.split(',')
-    
+
     magrefcol = [keys.index(mc) for mc in magrefs]
-    
+
     return [idcol,racol,deccol,zcol,zfcol,magcol]+magrefcol
-    
+
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description="Computation of non-parametric values for VUDS galaxies.")
     parser.add_argument('-i','--image',metavar='imgname',type=str,help="Field Image on which to compute the non-parametric values")
@@ -455,11 +455,11 @@ if __name__=='__main__':
     startid=args.ident
     endid=args.end_ident
 
-    
+
     colnumbers=find_columns(samplecat,args.magnitude,args.refmagnitude)
     ID,RA,DEC,Z,Zflag,Mag,MagRef1,MagRef2 = np.loadtxt(samplecat,unpack=True,dtype={'names':('a','b','c','d','e','f','g','h'),'formats':('i8','f4','f4','f4','i4','f4','f4','f4')},usecols=colnumbers)
     hsize = (args.size/args.pixscale)/2
-    
+
     check= np.array(['band' in i for i in fieldimg.split('/')])
     if 'CFHTLS' in fieldimg:
         band = upper(fieldimg.split('_')[-4])+'band'
@@ -467,7 +467,7 @@ if __name__=='__main__':
     else:
         index = np.where(check==True)[0]
         band= fieldimg.split('/')[index]
-    
+
     field = fieldimg.split('/')[index-1]
     survey = fieldimg.split('/')[index-2]
     if survey =='..':
@@ -478,12 +478,12 @@ if __name__=='__main__':
         prefix='no_dilation'
     else:
         prefix=''
-    
+
     if args.evo:
         suffix2='_evolum'
     else:
         suffix2=''
-        
+
     if args.fixthresh:
         mode = 'fixthresh'
         Tmode = args.threshold
@@ -493,28 +493,28 @@ if __name__=='__main__':
 
     if args.nosaving:
         if args.verbose:
-            print "WARNING: Not saving results to table!"
+            print("WARNING: Not saving results to table!")
         pass
     else:
         if startid is None:
             table_name= "nonparametric_%s_%s_%s_%s_%s_%.2f_ap%.2f_%s%s.txt"%(prefix,survey,field,band,mode,Tmode,args.aperture,args.color,suffix2)
-        else:            
+        else:
             table_name= "nonparametric_%s_%s_%s_%s_%s_%.2f_ap%.2f_%s%s-%i.txt"%(prefix,survey,field,band,mode,Tmode,args.aperture,args.color,suffix2,startid)
         if args.verbose:
-            print "Saving results to %s"%table_name
+            print("Saving results to %s"%table_name)
         table_out = open(table_name,"w")
         table_out = open(table_name,"w")
-        table_out.write("#ID\tRA\tDEC\tZ\tZflag\tq\ttheta\trpc\tCc\trpe\tCe\tA\tS\tG\tM20\tM\tI\tD\tT\t\\Psi\t\\Xi\tF\tSegFlag\tRpcFlag\tRpeFlag\tM20flag\tClumpFlag\tUsedThresh\tSkyMed\tSkyStd\n")    
-    
+        table_out.write("#ID\tRA\tDEC\tZ\tZflag\tq\ttheta\trpc\tCc\trpe\tCe\tA\tS\tG\tM20\tM\tI\tD\tT\t\\Psi\t\\Xi\tF\tSegFlag\tRpcFlag\tRpeFlag\tM20flag\tClumpFlag\tUsedThresh\tSkyMed\tSkyStd\n")
+
         if args.verbose:
-            print "Saving results to %s"%table_name
+            print("Saving results to %s"%table_name)
 
     start=0
     T=[]
     sblim=np.amax(np.loadtxt('sblimits.dat',unpack=True,usecols=[2]))
     if args.verbose:
         print('Surface Brightness Limit: %.5f counts/s/arcsec**2'%sblim)
-        
+
     has_psf=False
     if args.focus is None:
         psf_file=args.psf
@@ -536,9 +536,9 @@ if __name__=='__main__':
         elif ID[i]==endid:
             break
 
-          
-        if args.verbose:        
-            print "---------------------------------------------------------> VUDS %i (%i out of %i) @ kp=%.2f <---------------------------------------------------------"%(ID[i],i+1,len(ID),args.sigma0)
+
+        if args.verbose:
+            print("---------------------------------------------------------> VUDS %i (%i out of %i) @ kp=%.2f <---------------------------------------------------------"%(ID[i],i+1,len(ID),args.sigma0))
 
 
 ##        if os.path.isfile('psf.fits') and args.ident is None:
@@ -549,8 +549,8 @@ if __name__=='__main__':
 ##            sp.call('rm psf-%i.fits'%args.ident,shell=True)
 ##        else:
 ##            pass
-##        
-##        
+##
+##
 ##        if has_psf and args.ident is None:
 ##            sp.call('cp %s psf.fits'%psf_file,shell=True)
 ##        elif (has_psf) and (not args.ident is None):
@@ -560,12 +560,12 @@ if __name__=='__main__':
         if match_tiles == None:
             imgname = fieldimg
         else:
-            tilename=sp.check_output("awk '$1==%s {print $2}' %s"%(ID[i],match_tiles),shell=True)
+            tilename=sp.check_output("awk '$1==%s {print($2}' %s"%(ID[i],match_tiles),shell=True)
             try:
                 tilename=tilename.split()[0]
             except IndexError as err:
                 if args.verbose:
-                    print err
+                    print(err)
                 continue
             imgname ='%s/%s'%(fieldimg,tilename)
             if args.focus is None:
@@ -580,11 +580,11 @@ if __name__=='__main__':
 
         zp=2.0
         if args.fixthresh:
-            t = args.threshold       
+            t = args.threshold
         else:
             sigma_0=args.sigma0
             t = sigma_0 * ((1+Z[i])/(1+zp))**(-3)
-        
+
         if args.evo:
             t*=luminosity_evolution(Z[i],zp)
 
@@ -598,7 +598,7 @@ if __name__=='__main__':
             color=MagRef2[i]-Mag[i]
             if MagRef2[i]==Mag[i]==-99:
                 color=-99
-                
+
 
         ObjectGalaxy = Galaxy(imgname,{'ID':ID[i],'RA':RA[i],'DEC':DEC[i],'z':Z[i],'zflag':Zflag[i],'hsize':hsize,'color':color,'threshold':t,'sblimit':sblim})
         ObjectGalaxy.compute_CAS()
@@ -611,11 +611,10 @@ if __name__=='__main__':
         else:
             ObjectGalaxy.write_line_results(table_out)
         if args.verbose:
-            print "-------------------------------------------------------------------------------------------------------------------------------------"%ID[i] 
-        
-    
+            print("-------------------------------------------------------------------------------------------------------------------------------------"%ID[i])
+
+
     if args.nosaving:
         pass
     else:
         table_out.close()
-    
