@@ -75,10 +75,13 @@ if __name__ == "__main__":
     parser.add_argument('-c','--clusters',default="",metavar='LIST',type=str)
     parser.add_argument('-i','--indices',default="",type=str,metavar='SET')
     parser.add_argument('--name',default="",type=str,metavar='ID')
-    parser.add_argument('-n','--nrun',default=5000,type=int,metavar='NRUN')
+    parser.add_argument('-n','--nrun',default=1000,type=int,metavar='NRUN')
+    parser.add_argument('-e','--nexclude',default=900,type=int,metavar='NRUN')
+    parser.add_argument('--nchain',default=160,type=int,metavar='NRUN')
     parser.add_argument("-P","--plot", action='store_true')
     parser.add_argument("-S","--show", action='store_true')
     parser.add_argument("-L","--nolensing", action="store_true")
+    parser.add_argument("-N","--sersicfree", action="store_true")
 
     args = parser.parse_args()
 
@@ -129,6 +132,13 @@ if __name__ == "__main__":
     else:
         SUFFIX = LENS
 
+    if args.sersicfree is True:
+        SUFFIX += "_NFREE"
+    else:
+        SUFFIX += "_NFIXED"
+
+
+
     # fin = h5py.File("%s_%s_galaxyData.hdf5"%(catname.split(".")[0],scale),"r")
     # fin = h5py.File("A370_275C_abell370_30mas_galaxyData.hdf5","r")
     fin = h5py.File(ConfigFile["data"]["datafile"],"r")
@@ -147,6 +157,8 @@ if __name__ == "__main__":
 
     nGals = len(fin)
     nMontecarlo = args.nrun
+    nChain = args.nchain
+    nExclude = args.nexclude
     for i,galaxySet in enumerate(fin):
         if args.name != "":
             if galaxySet!= args.name:
@@ -253,7 +265,7 @@ if __name__ == "__main__":
             ax[0].set_ylabel("Original")
             ax[1].set_ylabel("with Masking")
             for eixo in ax:
-                eixo.tick_params(labelleft="off",labelbottom="off")
+                eixo.tick_params(labelleft=False,labelbottom=False)
             # fig.savefig("debugImages/%s_data.png"%(galaxySet))
 
             fig,ax=mpl.subplots(1,6,figsize=(22,4))
@@ -268,10 +280,21 @@ if __name__ == "__main__":
             break
 
         # galaxyParsMC = galaxyObject.fit(initPars[:4]+[1.0]+initPars[4:],mag_zp,exptime,nRun = nMontecarlo)
-        galaxyParsMC = galaxyObject.emcee_fit(initPars,mag_zp,exptime,\
+        if args.sersicfree is False:
+            galaxyParsMC = galaxyObject.emcee_fit(initPars,mag_zp,exptime,\
                                               lensingPars=lensPars,\
+                                              nchain = nChain,\
                                               nsamples = nMontecarlo,\
-                                              plot=PLOT,threads = 1,\
+                                              nexclude = nExclude,\
+                                              plot=PLOT,threads = 3,\
+                                              ntemps=None)
+        else:
+            galaxyParsMC = galaxyObject.emcee_fit_MP(initPars[:4]+[1.0]+initPars[4:],mag_zp,exptime,\
+                                              lensingPars=lensPars,\
+                                              nchain = nChain,\
+                                              nsamples = nMontecarlo,\
+                                              nexclude = nExclude,\
+                                              plot=PLOT,threads = 3,\
                                               ntemps=None)
 
         da = cosmos.angular_distance(fin["/%s"%(galaxySet)].attrs["z"])
@@ -283,17 +306,17 @@ if __name__ == "__main__":
         q = galaxyParsMC[4+kn,:]
         theta = galaxyParsMC[5+kn,:]
 
-        # if PLOT is True:
-        if True:
+        if PLOT is True:
+        # if True:
             fig,ax = plotResults.corner_plot_wImage(i+1,galImage*(1-galMask),PIXSCALE,[magnitudes,radius]\
                                             ,[r'$mag$',r'$r_e\ [\mathrm{kpc}]$'],redshift=fin["/%s"%(galaxySet)].attrs["z"])
-            fig.savefig("debugResults/Fit_CoVarSimple_%s.png"%(galaxySet))
+            # fig.savefig("debugResults/Fit_CoVarSimple_%s.png"%(galaxySet))
 
             fig,ax = plotResults.corner_plot([xc,yc,magnitudes,radius,q,theta]\
                                 ,[r"$x_c$",r"$y_c$",r'$mag$',\
                                 r'$r_e\ [\mathrm{kpc}]$',r"$(b/a)$",\
                                 r"$\theta_\mathrm{PA}$"])
-            fig.savefig("debugResults/Fit_CoVarFull_%s.png"%(galaxySet))
+            # fig.savefig("debugResults/Fit_CoVarFull_%s.png"%(galaxySet))
 
             bestModelPars = list(np.median(galaxyParsMC,axis=-1))
             if withLensing is True:
@@ -320,10 +343,10 @@ if __name__ == "__main__":
             for eixo in ax:
                 eixo.set_xticks([])
                 eixo.set_yticks([])
-            fig.savefig("debugResults/Fit_Model_%s.png"%(galaxySet))
+            # fig.savefig("debugResults/Fit_Model_%s.png"%(galaxySet))
             print("Best Fit Pars",bestModelPars)
             # mpl.close("all")
-            # break
+            break
 
         results = np.percentile(galaxyParsMC,[16,50,84],axis=-1)
         errors = results[1:,:]-results[:-1,:]
@@ -354,7 +377,8 @@ if __name__ == "__main__":
             for i in range(galaxyParsMC.shape[0]):
                 lineResults += "\t%10.6f\t%10.6f\t%10.6f"%(results[1,i],errors[0,i],errors[1,i])
             lineResults +="\n"
-            print(lineResults)            
+            print(lineResults)
+
 
     fin.close()
     if PLOT is False and SHOW_DATA is False:

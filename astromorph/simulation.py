@@ -241,7 +241,7 @@ def test_sersic():
     mpl.show()
     return
 
-def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,exposure_time,psf=None,OverSampling = 3,debug=False):
+def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,exposure_time,psf=None,OverSampling = 5,debug=False):
     r"""
 
     Parameters

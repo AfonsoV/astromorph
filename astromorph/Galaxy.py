@@ -884,7 +884,7 @@ class Galaxy(object):
 
 
 
-    def emcee_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=20,nsamples=10000,plot=False,threads=1,ntemps=None):
+    def emcee_fit(self,initPars,mag_zeropoint,exposure_time,lensingPars=None,nchain=20,nsamples=10000,nexclude=None,plot=False,threads=1,ntemps=None):
         r"""
 
         Parameters
@@ -900,7 +900,10 @@ class Galaxy(object):
         --------
 
         """
-        nexclude = nsamples//2
+        if nexclude is None:
+            nexclude = nsamples//2
+        if nexclude > nsamples:
+            raise ValueError("nexclude cannot be greater than nsamples.")
 
         masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
         masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
@@ -931,7 +934,7 @@ class Galaxy(object):
             sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability,\
                         args=(masked_image, masked_sigma,mag_zeropoint,\
                               exposure_time, self.psf,lensingPars),\
-                        threads=threads,a=2.4)
+                        threads=threads,a=1.5)
             sampler.run_mcmc(pos, nsamples)
         else:
             sampler = emcee.PTSampler(ntemps,nwalkers, ndim, lnprobability,prior,\
@@ -1015,7 +1018,7 @@ class Galaxy(object):
             sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprobability_MP,\
                         args=(masked_image, masked_sigma,mag_zeropoint,\
                               exposure_time,nModels,self.psf,lensingPars),\
-                        threads=threads,a=0.25)
+                        threads=threads,a=1.5)
             sampler.run_mcmc(pos, nsamples)
         else:
             sampler = emcee.PTSampler(ntemps,nwalkers, ndim, lnprobability_MP,prior_MP,\
@@ -1516,9 +1519,9 @@ def plot_results(sampler,pars,ntemps=None):
         # print(flatChain.shape,flatChain[:,:,n].shape,flatChain[:,:,n].T.shape)
         ax[NP+n].hist(flatChain[:,:,n].T,bins=50,orientation='horizontal',color=ColorsTemps[:ntemps], histtype='bar', stacked=True)
         if n<(NP-1):
-            ax[n].tick_params(labelbottom='off')
-            ax[NP+n].tick_params(labelbottom='off')
-        ax[NP+n].tick_params(labelleft='off',labelsize=14)
+            ax[n].tick_params(labelbottom=False)
+            ax[NP+n].tick_params(labelbottom=False)
+        ax[NP+n].tick_params(labelleft=False,labelsize=14)
         ax[n].tick_params(labelsize=12)
 
     ax[NP-1].set_xlabel(r'$N_\mathrm{step}$')
