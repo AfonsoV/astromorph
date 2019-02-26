@@ -1,10 +1,12 @@
 import numpy as np
 import astropy.io.fits as pyfits
 import astropy.wcs as pywcs
+import matplotlib.pyplot as mpl
 
 from . import utils
 from . import plot_utils as putils
 from .cosmology import angular_distance
+
 
 class Error(Exception):
     """Base class for exceptions in this module."""
@@ -281,7 +283,7 @@ class LensingModel(object):
         putils.draw_cross(ax,0,0,gap=1.0,size=1.5,color="white",lw=3)
         return None
 
-    def get_lensing_parameters_at_position(self,coords,window=5):
+    def get_lensing_parameters_at_position(self,coords,window=5,plot=False):
         r"""
 
         Parameters
@@ -303,4 +305,19 @@ class LensingModel(object):
         medGamma = np.median(self.gamma_at_z[yl:yu,xl:xu])
         medMu = np.median(self.mu_at_z[yl:yu,xl:xu])
         medAngle = np.median(self.shear_angle[yl:yu,xl:xu])
+
+        if plot is True:
+            fig,ax = mpl.subplots(1,3)
+            fig.subplots_adjust(wspace=0)
+            ax[0].imshow(self.kappa_at_z,vmin=0,vmax=min(self.kappa_at_z.max(),3))
+            ax[0].set_title("convergence")
+            ax[1].imshow(self.gamma_at_z,vmin=0,vmax=min(self.gamma_at_z.max(),3))
+            ax[1].set_title("shear")
+            ax[2].imshow(self.mu_at_z,vmin=1,vmax=min(self.mu_at_z.max(),30))
+            ax[2].set_title("magnification")
+            # ax[3].imshow(self.shear_angle)
+            # ax[3].set_title("shear angle")
+            for eixo in ax:
+                eixo.tick_params(labelleft=False,labelbottom=False)
+
         return (medKappa,medGamma,medMu,medAngle)

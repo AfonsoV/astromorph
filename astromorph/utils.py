@@ -615,9 +615,9 @@ def sky_value(img,k=3):
     media=np.nanmean(img[img!=0])
     dev=np.nanstd(img[img!=0])
     back=img.copy()
-    back=back[back!=0]
+    back=back[(back!=0)*(np.isfinite(back))]
     thresh=media+k*dev
-    npix = img[(img)>=thresh].size
+    npix = img.size
     while npix>0:
         back = back[(back)<thresh]
         media=np.nanmean(back)

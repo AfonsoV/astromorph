@@ -1003,12 +1003,14 @@ class Galaxy(object):
             pos[:,0+7*i][pos[:,0+7*i]>self.cutout.shape[0]]=self.cutout.shape[0]-1
             pos[:,1+7*i][pos[:,1+7*i]<0]=1
             pos[:,1+7*i][pos[:,1+7*i]>self.cutout.shape[1]]=self.cutout.shape[1]-1
+            pos[:,2+7*i][pos[:,2+7*i]<0]=0
+            pos[:,2+7*i][pos[:,2+7*i]>35]=35
             pos[:,3+7*i][pos[:,3+7*i]<0.5]=0.5
-            pos[:,3+7*i][pos[:,3+7*i]>50]=50
+            pos[:,3+7*i][pos[:,3+7*i]>20]=20
             pos[:,4+7*i][pos[:,4+7*i]<0.1]=0.1
             pos[:,4+7*i][pos[:,4+7*i]>N_MAX]=N_MAX-0.1
             pos[:,5+7*i][pos[:,5+7*i]<0.1]=0.1
-            pos[:,5+7*i][pos[:,5+7*i]>1]=1.0
+            pos[:,5+7*i][pos[:,5+7*i]>1]=1
             pos[:,6+7*i][pos[:,6+7*i]>90]-=180
             pos[:,6+7*i][pos[:,6+7*i]<-90]+=180
 
@@ -1235,9 +1237,7 @@ class Galaxy(object):
                                         magZP=mag_zeropoint,\
                                         psf=self.psf,\
                                         OverSampling=oversampling)
-        skyModel = models.Const2D(amplitude = skyValue)
-        model = sersicModel+skyModel#+psfModel
-
+        model = sersicModel
         if nModels>1:
             for i in range(nModels-1):
                 sersicModel = LensedSersicModel(lensPars=lensPars,\
@@ -1246,13 +1246,18 @@ class Galaxy(object):
 
                 model += sersicModel
 
+        skyModel = models.Const2D(amplitude = skyValue)
+        model += skyModel#+psfModel
+
+
+
         masked_image = np.ma.masked_array(self.cutout,mask=self.mask)
         masked_sigma = np.ma.masked_array(self.sigmaImage,mask=self.mask)
 
         N,M = masked_image.shape
         x,y = np.mgrid[:N,:M]
 
-        # print(f"{utils.CRED}Init Pars:{utils.CEND}",",".join([f"{utils.CRED}{m:12.2f}{utils.CEND}" for m in initPars]))
+        print(f"{utils.CRED}Init Pars:{utils.CEND}",",".join([f"{utils.CRED}{m:12.2f}{utils.CEND}" for m in initPars]))
 
         finalResults = np.zeros([model.parameters.size+1,nRun])
         i=0
@@ -1264,20 +1269,23 @@ class Galaxy(object):
             model.I_eff_0 = np.random.lognormal(np.log10(initPars[2]),1.5)
             model.r_eff_0 = np.random.lognormal(np.log10(initPars[3]),1)
             model.n_0 = 1#initPos[4]
-            # model.n_0.fixed = True
+            model.n_0.fixed = True
             model.axratio_0 = initPos[5]
             model.theta_0 = initPos[6]
-            model.amplitude_1 = initPars[-1]
             if nModels ==2:
-                model.x_0_2 = initPos[7]
-                model.y_0_2 = initPos[8]
-                model.I_eff_2 = initPos[9]
-                model.r_eff_2 = initPos[10]
-                model.n_2 = initPos[11]
-                model.axratio_2 = initPos[12]
-                model.theta_2 = initPos[13]
+                model.x_0_1 = initPos[7]
+                model.y_0_1 = initPos[8]
+                model.I_eff_1 = initPos[9]
+                model.r_eff_1 = initPos[10]
+                model.n_1 = 1#initPos[11]
+                model.n_1.fixed = True
+                model.axratio_1 = initPos[12]
+                model.theta_1 = initPos[13]
+                model.amplitude_2 = initPars[-1]
+            else:
+                model.amplitude_1 = initPars[-1]
 
-            # print(f"{utils.CBLUE}guess:{utils.CEND}",",".join([f"{utils.CBLUE}{m:12.2f}{utils.CEND}" for m in model.parameters]))
+            print(f"{utils.CBLUE}guess:{utils.CEND}",",".join([f"{utils.CBLUE}{m:12.2f}{utils.CEND}" for m in model.parameters]))
 
             with warnings.catch_warnings():
                 warnings.simplefilter("error", OptimizeWarning)
@@ -1288,7 +1296,7 @@ class Galaxy(object):
                         nbadFits += 1
                         continue
                     chi = (1/masked_image.count())*np.ma.sum( (masked_image-modelFit(x,y))*(masked_image-modelFit(x,y))/(masked_sigma*masked_sigma))
-                    # print(f"{utils.CGREEN}final:{utils.CEND}",",".join([f"{utils.CGREEN}{m:12.2f}{utils.CEND}" for m in modelFit.parameters]),f"chi={chi:.3f}")
+                    print(f"{utils.CGREEN}final:{utils.CEND}",",".join([f"{utils.CGREEN}{m:12.2f}{utils.CEND}" for m in modelFit.parameters]),f"chi={chi:.3f}")
                     finalResults[:-1,i] = modelFit.parameters
                     finalResults[-1,i] = chi
                     i+=1
@@ -1337,7 +1345,7 @@ class Galaxy(object):
         finalResults = np.zeros([model.parameters.size+1,nRun])
         i=0
         nbadFits = 0
-        # print(f"{utils.CRED}Init Pars:{utils.CEND}",",".join([f"{utils.CRED}{m:12.2f}{utils.CEND}" for m in initPars]))
+        print(f"{utils.CRED}Init Pars:{utils.CEND}",",".join([f"{utils.CRED}{m:12.2f}{utils.CEND}" for m in initPars]))
 
         while i<nRun and nbadFits<100*nRun:
             initPos = np.random.normal(initPars,sigmaPars)
@@ -1359,7 +1367,7 @@ class Galaxy(object):
             # model.amplitude_1.fixed=True
 
 
-            # print(f"{utils.CBLUE}guess:{utils.CEND}",",".join([f"{utils.CBLUE}{m:12.2f}{utils.CEND}" for m in model.parameters]))
+            print(f"{utils.CBLUE}guess:{utils.CEND}",",".join([f"{utils.CBLUE}{m:12.2f}{utils.CEND}" for m in model.parameters]))
 
 
             with warnings.catch_warnings():
@@ -1373,7 +1381,7 @@ class Galaxy(object):
                         continue
 
                     chi = (1/masked_image.count())*np.ma.sum( (masked_image-modelFit(x,y))*(masked_image-modelFit(x,y))/(masked_sigma*masked_sigma))
-                    # print(f"{utils.CGREEN}final:{utils.CEND}",",".join([f"{utils.CGREEN}{m:12.2f}{utils.CEND}" for m in modelFit.parameters]),f"chi={chi:.3f}")
+                    print(f"{utils.CGREEN}final:{utils.CEND}",",".join([f"{utils.CGREEN}{m:12.2f}{utils.CEND}" for m in modelFit.parameters]),f"chi={chi:.3f}")
                     finalResults[:-1,i] = modelFit.parameters
                     finalResults[-1,i] = chi
                     i+=1
