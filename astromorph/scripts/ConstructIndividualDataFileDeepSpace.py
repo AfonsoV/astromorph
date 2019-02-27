@@ -772,7 +772,7 @@ if __name__== "__main__":
             galaxyData = fout.create_group(f"{filters[k]}")
             galaxyData.create_dataset("galaxy",data=galaxy[filters[k]].cutout[EDGE:-EDGE,EDGE:-EDGE])
             galaxyData.create_dataset("mask",data=maskImage[filters[k]][EDGE:-EDGE,EDGE:-EDGE])
-            galaxyData.create_dataset("psf",data=psfImage[filters[k]][EDGE:-EDGE,EDGE:-EDGE])
+            galaxyData.create_dataset("psf",data=psfImage[filters[k]])
             galaxyData.create_dataset("weights",data=weights[filters[k]].cutout[EDGE:-EDGE,EDGE:-EDGE])
             galaxyData.create_dataset("sigma",data=rmsMap[filters[k]][EDGE:-EDGE,EDGE:-EDGE])
             galaxyData.create_dataset("labels",data=detImage[filters[k]][EDGE:-EDGE,EDGE:-EDGE])
