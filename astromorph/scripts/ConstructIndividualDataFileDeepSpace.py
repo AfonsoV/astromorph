@@ -8,171 +8,23 @@ import matplotlib.ticker as mpt
 import matplotlib.cm as cm
 import matplotlib.patches as mpp
 import astropy.io.fits as pyfits
+import astropy.wcs as pywcs
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astromorph import utils, galfit,simulation, lensing
 from astromorph import plot_utils as putils
 from astromorph.lensing import LensingModel
-from astromorph.Galaxy import Galaxy
+from astromorph.Galaxy import Galaxy,create_sigma_image,stack_images
 from astromorph.clumps import ClumpFinder
 import astromorph.cosmology as cosmos
 import scipy.ndimage as snd
-import scipy.interpolate as sip
 import configparser
 import h5py
 
 from astropy.modeling import models, fitting
 
 # from easyOutput import eazyResults
-
-def create_sigma_image(img,gain,ncombine=1):
-
-    img_to_electrons = img*gain*ncombine
-    sky_med,sky_std = utils.sky_value(img_to_electrons)
-
-    pre_sigma = np.sqrt(img_to_electrons*img_to_electrons+sky_std*sky_std)
-    sigma = np.sqrt(pre_sigma/gain)
-    return sigma
-
-def regularized_coordinates(xmin,xmax,ymin,ymax,image):
-    if ymin<0:
-        return False
-    if xmin<0:
-        return False
-    if ymax>image.shape[0]:
-        return False
-    if xmax>image.shape[1]:
-        return False
-    return True
-
-def stack_models(models,raExtent,decExtent,size=None,scale=None,modelbbox=None):
-    if size is None and scale is None:
-        raise ValueError("Either size or pixscale must be defined")
-
-    if scale is not None:
-        raGrid = np.arange(raExtent[0],raExtent[1]+scale,scale)
-        decGrid = np.arange(decExtent[0],decExtent[1]+scale,scale)
-    elif size is not None:
-        raGrid = np.linspace(raExtent[0],raExtent[1],size)
-        decGrid = np.linspace(decExtent[0],decExtent[1],size)
-
-    # print(raExtent,raGrid.size)
-    # print(decExtent,decGrid.size)
-
-    modelGrid = np.zeros([4,decGrid.size,raGrid.size,len(models)])
-
-    for i in range(len(models)):
-        # print("Model",i+1)
-        if models[i].kappa_at_z is None:
-            kappa = models[i].kappa
-            gamma = models[i].gamma
-            xdeflect = models[i].xdeflect
-            ydeflect = models[i].ydeflect
-        else:
-            kappa = models[i].kappa_at_z
-            gamma = models[i].gamma_at_z
-            xdeflect = models[i].xdeflect_at_z
-            ydeflect = models[i].ydeflect_at_z
-
-        if xdeflect is None:
-            #If not present in model files, ignore
-            xdeflect = np.ones_like(kappa)*np.nan
-            ydeflect = np.ones_like(kappa)*np.nan
-
-        if modelbbox is None:
-            modelExtent = models[i].get_image_box_coordinates()
-            raModel = np.linspace(modelExtent[0],modelExtent[1],\
-                                  models[i].gamma.shape[1])
-            decModel = np.linspace(modelExtent[2],modelExtent[3],\
-                                   models[i].gamma.shape[0])
-        else:
-            size,coords = modelbbox
-            try:
-                xl,xu,yl,yu = models[i].set_bounding_box(size,coords)
-                raModel = np.linspace(coords.ra.value-size/(2*3600.),\
-                                      coords.ra.value+size/(2*3600.),xu-xl)
-                decModel = np.linspace(coords.dec.value-size/(2*3600.),\
-                                       coords.dec.value+size/(2*3600.),yu-yl)
-
-                if not regularized_coordinates(xl,xu,yl,yu,kappa):
-                    padWidth = int(size/models[i].pixelScale)
-                    kappaPadded = np.pad(kappa,padWidth,mode="constant",\
-                                         constant_values=np.nan)
-                    gammaPadded = np.pad(gamma,padWidth,mode="constant",\
-                                         constant_values=np.nan)
-                    xdeflectPadded = np.pad(xdeflect,padWidth,mode="constant",\
-                                         constant_values=np.nan)
-                    ydeflectPadded = np.pad(ydeflect,padWidth,mode="constant",\
-                                         constant_values=np.nan)
-                    xl += padWidth
-                    xu += padWidth
-                    yl += padWidth
-                    yu += padWidth
-                    kappa = kappaPadded[yl:yu,xl:xu]
-                    gamma = gammaPadded[yl:yu,xl:xu]
-                    xdeflect = xdeflectPadded[yl:yu,xl:xu]
-                    ydeflect = ydeflectPadded[yl:yu,xl:xu]
-                else:
-                    kappa = kappa[yl:yu,xl:xu]
-                    gamma = gamma[yl:yu,xl:xu]
-                    xdeflect = xdeflect[yl:yu,xl:xu]
-                    ydeflect = ydeflect[yl:yu,xl:xu]
-
-            except IndexError as err:
-                kappa = None
-                gamma = None
-                xdeflect = None
-                ydeflect = None
-                print(err)
-
-
-        for k,modelVariable in enumerate([kappa,gamma,xdeflect,ydeflect]):
-            # print("Variable",k+1,modelVariable.shape)
-            if kappa is None:
-                modelGrid[k,:,:,i] = np.nan*np.ones([decGrid.size,raGrid.size])
-            else:
-                modelInterpolator = sip.interp2d(raModel,decModel,modelVariable,\
-                                        bounds_error=False,fill_value=np.nan)
-                modelGrid[k,:,:,i] = modelInterpolator(raGrid,decGrid)[:,::-1]
-
-    # print(modelGrid.shape)
-    # return np.nanmedian(modelGrid,axis=-1)
-    return np.nanpercentile(modelGrid,[16,50,84],axis=-1)
-
-def stack_images(images,raExtent,decExtent,size,weights=None,norm=None):
-    raGrid = np.linspace(raExtent[0],raExtent[1],size)
-    decGrid = np.linspace(decExtent[0],decExtent[1],size)
-    modelGrid = np.zeros([raGrid.size,decGrid.size,len(images)])
-    if weights is not None:
-        modelWeights = np.zeros([raGrid.size,decGrid.size,len(images)])
-
-
-    for i in range(len(images)):
-        imageExtent = images[i].get_bounding_box_coordinates()
-        raModel = np.linspace(imageExtent[0],imageExtent[1],images[i].cutout.shape[1])
-        decModel = np.linspace(imageExtent[2],imageExtent[3],images[i].cutout.shape[0])
-        modelInterpolator = sip.interp2d(raModel,decModel,images[i].cutout,bounds_error=False,fill_value=np.nan)
-
-        if weights is not None and len(weights)==len(images):
-            weightsInterpolator = sip.interp2d(raModel,decModel,weights[i].cutout,bounds_error=False,fill_value=np.nan)
-            modelWeights[:,:,i] = weightsInterpolator(raGrid,decGrid)[:,::-1]
-        elif weights is not None:
-            raise ValueError("Invalid size for weight list. Must be the same as input images")
-
-        modelGrid[:,:,i] = modelInterpolator(raGrid,decGrid)[:,::-1]
-        modelGrid[modelGrid==0]=np.nan
-
-        if norm is not None and len(norm)==len(images):
-            modelGrid[:,:,i] *= norm[i]
-        elif norm is not None:
-            raise ValueError("Invalid size for norm list. Must be the same as input images")
-
-    if weights is None:
-        return np.nanmedian(modelGrid,axis=-1)
-    else:
-        return np.nansum(modelGrid*modelWeights,axis=-1)/np.nansum(modelWeights,axis=-1)
-
 
 def getRegionData(images,filters,segmap,weights=None,debugRegion=None):
 
@@ -395,7 +247,7 @@ def select_cluster(galName):
 
 if __name__== "__main__":
 
-    SIZE = 4.5
+    SIZE = 4.0
     PIXSCALE = 0.06
     MAGZP = 26.0
     EXPTIME = 1
@@ -405,12 +257,12 @@ if __name__== "__main__":
     PSFTRIM = 41
 
     catname = sys.argv[1]
-    # rootDataFolder ="/data2/bribeiro/HubbleFrontierFields/deepspace"
-    rootDataFolder="../../data/deepspace/"
+    rootDataFolder ="/data2/bribeiro/HubbleFrontierFields/deepspace"
+    # rootDataFolder="../../data/deepspace/"
 
     filters=["f275w","f336w","f435w","f606w","f814w","f105w","f125w","f140w","f160w"]
     filtersStack = ["f105w","f125w","f140w","f160w"]
-    allClusters = ["abell370"]#,"abell2744","abell1063","macs0416","macs0717","macs1149"]
+    allClusters = ["abell370","abell2744","abell1063","macs0416","macs0717","macs1149"]
 
 
     # zphotCatalogs = { "%s"%(c):eazyResults("%s/%sclu_catalogs/eazy/%sclu_v3.9"%(rootDataFolder,c,c),\
@@ -485,12 +337,12 @@ if __name__== "__main__":
 
 
     for cluster,epoch in zip(allClusters,allEpochs):
-        imgfolder="%s/%sclu_misc/images/bcgs_out"%(rootDataFolder,cluster)
-        imgnames = ["%s/%s_bcgs_out_%s_bkg_drz_masked.fits"%(imgfolder,\
-                    cluster,f) for f in filters]
-        # imgfolder="%s/%sclu_misc/images/psf_matched"%(rootDataFolder,cluster)
-        # imgnames = ["%s/%s_bcgs_out_%s_psf_bkg_drz.fits"%(imgfolder,\
+        # imgfolder="%s/%sclu_misc/images/bcgs_out"%(rootDataFolder,cluster)
+        # imgnames = ["%s/%s_bcgs_out_%s_bkg_drz_masked.fits"%(imgfolder,\
         #             cluster,f) for f in filters]
+        imgfolder="%s/%sclu_misc/images/psf_matched"%(rootDataFolder,cluster)
+        imgnames = ["%s/%s_bcgs_out_%s_psf_bkg_drz.fits"%(imgfolder,\
+                    cluster,f) for f in filters]
 
         # exptimes = ["%s/hlsp_frontier_hst_wfc3-%s_%s_%s_v1.0%s_exp.fits"%(imgfolder,\
         #                                                 scale,cluster,f,epoch) for f in filters]
@@ -522,8 +374,8 @@ if __name__== "__main__":
 
 
 
-        # lens_models_folder = "/data2/bribeiro/HubbleFrontierFields/LensModels/%s"%(cluster)
-        lens_models_folder = "../../data/LensModels/%s"%(cluster)
+        lens_models_folder = "/data2/bribeiro/HubbleFrontierFields/LensModels/%s"%(cluster)
+        # lens_models_folder = "../../data/LensModels/%s"%(cluster)
         lensModelNames = find_all_models(lens_models_folder,rejectModels)
         nModels = len(lensModelNames)
         ConfigFile = configparser.ConfigParser()
@@ -550,7 +402,6 @@ if __name__== "__main__":
         allImageInfo[cluster]["lensModels"] = modelsLensing
         allImageInfo[cluster]["lensRedshift"] = redshiftLens
 
-
     # if catname == "udrop.cat":
     #     catalog = np.loadtxt(catname,dtype={"names":("ID","z","zconf"),"formats":("U50","f4","f4")})
     # else:
@@ -558,6 +409,7 @@ if __name__== "__main__":
     #     dtype={"names":("ID","RA","DEC","mag","dummy1","dummy2","z","zerr"),\
     #     "formats":("U50","U50","U50","f4","f4","f4","f4","f4")})
     catalog = Table.read(catname,format="ascii")
+    catalog.rename_column("z_phot","redshift")
 
 
     # testGals = ["A370336-9553634160",\
@@ -577,9 +429,9 @@ if __name__== "__main__":
     #            "A370275-9520535460","A370336-9489134421"]
 
     # testGals = ["A370336-9541335531"]
-    # testGals = ["A370336-9489134421"]
     # testGals = ["A370275-9520535460"]
     # testGals = ["A370336-9576034044"]
+    # testGals = ["A370336-9489134421"]
     # testGals = ["A370336-9541335531","A370275-9520535460"]
 
 
@@ -592,6 +444,8 @@ if __name__== "__main__":
     testGals = ["A370336-9505833405"]
     # testGals =["A370336-9505833405","A370336-9539455699"]
     # testGals =["A370336-9539455699"]
+    # testGals = ["M0717275-7350845375","M0717275-7373845409"]
+    # testGals = ["M0717275-7350845375","A370336-9505833405"]
 
 
     nGals = len(catalog)
@@ -603,7 +457,7 @@ if __name__== "__main__":
 
         if not os.path.isdir(galName):
             os.mkdir(galName)
-
+        #
         fout = h5py.File(f"{galName}/{galName}_deepspace_galaxyData.hdf5","w")
 
 
@@ -642,13 +496,17 @@ if __name__== "__main__":
 
         stackRA = (galPosition.ra.value[0]-SIZE/(2*3600.),galPosition.ra.value[0]+SIZE/(2*3600.))
         stackDEC = (galPosition.dec.value[0]-SIZE/(2*3600.),galPosition.dec.value[0]+SIZE/(2*3600.))
-        pixScaleLensStack = 0.2
+        pixScaleLensStack = PIXSCALE#0.2
 
         print("\tStacking Lens Models...")
-        modelStack = stack_models(lensModels,stackRA,stackDEC,\
+        modelStack,ModelCoords = lensing.stack_models(lensModels,stackRA,stackDEC,\
                                   scale=pixScaleLensStack/3600.0,\
-                                  modelbbox=(1.1*SIZE,galPosition))
-        ExtentModel = stackRA+stackDEC
+                                  modelbbox=(2*SIZE,galPosition))
+
+        ExtentModel =  (ModelCoords[1]+pixScaleLensStack/2/3600,\
+                        ModelCoords[0]-pixScaleLensStack/2/3600,\
+                        ModelCoords[2]-pixScaleLensStack/2/3600,\
+                        ModelCoords[3]+pixScaleLensStack/2/3600)
 
         print("\tCreating LensModel Object...")
         LensParsGalaxyFull = []
@@ -656,7 +514,7 @@ if __name__== "__main__":
             LensingModelStacked = LensingModel(lensRedshift,pixScaleLensStack)
             LensingModelStacked.set_lensing_data(kappa=modelStack[i,0,:,:],gamma=modelStack[i,1,:,:],\
                                                  xdeflect=modelStack[i,2,:,:],ydeflect=modelStack[i,3,:,:],\
-                                                 extent=ExtentModel)
+                                                 extent=ModelCoords)
 
             if i == 1 :
                 zTest = np.linspace(-1.0,1.0) + galRedshift
@@ -673,19 +531,21 @@ if __name__== "__main__":
                 MagnificationMap =  LensingModelStacked.mu_at_z
 
                 muUsed = LensParsGalaxy[2]
+                muErr = 1 / (2 * np.sqrt(muTest**3)) * (muUsed-muTest)
                 fig,ax = mpl.subplots(2,1,sharex=True,figsize=(12,8))
                 fig.subplots_adjust(hspace=0)
                 ax[0].plot(zTest,muTest,"k-",linewidth=2)
-                ax[1].plot(zTest,1 / (2 * np.sqrt(muTest**3)) * (muUsed-muTest),"k-",linewidth=2)
+                ax[1].plot(zTest,muErr,"k-",linewidth=2)
                 ax[1].set_xlabel(r"$z$")
                 ax[0].set_ylabel(r"$\mu$")
                 ax[1].set_ylabel(r"$(\Delta r/r)_{\mu}$")
                 for eixo in ax:
-                    eixo.vlines(galRedshift,-10,10,linestyle="dashed",color="SteelBlue")
+                    eixo.vlines(galRedshift,-10,30,linestyle="dashed",color="SteelBlue")
                     eixo.set_xlim(zTest[0],zTest[-1])
-                ax[1].set_ylim(-0.05,0.15)
-                ax[0].set_ylim(3.01,6.29)
-                fig.savefig("debugResults/zphot_uncertainties_magnificantion.png")
+                ax[1].set_ylim(np.nanmin(muErr),np.nanmax(muErr))
+                ax[0].set_ylim(muTest.min(),muTest.max())
+                ax[0].set_title(galName)
+                fig.savefig(f"{galName}/{galName}_zphot_uncertainties_magnification.png")
 
             LensingModelStacked.set_model_at_z(galRedshift)
             LensingModelStacked.compute_shear_angle(galRedshift)
@@ -695,6 +555,9 @@ if __name__== "__main__":
         LensParsGalaxyFull = np.asarray(LensParsGalaxyFull)
         errorsLensPars = LensParsGalaxyFull[1:]-LensParsGalaxyFull[:-1]
         LensPars = LensParsGalaxyFull[1,:]
+        print("lens",LensPars)
+        print("lensError",errorsLensPars)
+
 
 
         print("\tStacking Galaxy Images...")
@@ -708,13 +571,12 @@ if __name__== "__main__":
         maskImage = dict()
 
 
-        figF,axF = mpl.subplots(1,len(filters),figsize=(22,4),sharex=True,sharey=True)
+        figF,axF = mpl.subplots(1,len(filters),figsize=(24,4),sharex=True,sharey=True)
         figF.subplots_adjust(wspace=0,hspace=0)
         fig,ax = mpl.subplots(5,len(filters),figsize=(18,10),sharex=True,sharey=True)
         fig.subplots_adjust(wspace=0,hspace=0)
 
-        figM,axM = mpl.subplots(1,2,figsize=(24,10))
-        figM.subplots_adjust(wspace=0)
+
         for k in range(len(filters)):
             galaxy[filters[k]] = galImages[k]
             galaxy[filters[k]].set_coords(galPosition)
@@ -726,12 +588,31 @@ if __name__== "__main__":
             weights[filters[k]] = whtImages[k]
             weights[filters[k]].set_coords(galPosition)
             weights[filters[k]].set_bounding_box(SIZE,PIXSCALE)
-            extentGalaxy = galaxy[filters[k]].get_bounding_box_coordinates()
-            axM[0].imshow(galaxy[filters[k]].cutout,extent=extentGalaxy,cmap="cividis",vmin=-1e-3,vmax=0.1)
-            axM[0].contour(MagnificationMap,levels=[4,4.8,5,5.2,6,10,30],extent=ExtentModel,cmap="Reds")
-            axM[1].imshow(MagnificationMap[:,::-1],extent=ExtentModel,cmap="cividis",vmax=30)
-            for eixo in axM:
-                eixo.tick_params(labelleft=False,labelbottom=False)
+
+            GalaxyCoords = galaxy[filters[k]].get_bounding_box_coordinates()
+            extentGalaxy = (GalaxyCoords[0]+PIXSCALE/2/3600,\
+                            GalaxyCoords[1]-PIXSCALE/2/3600,\
+                            GalaxyCoords[2]-PIXSCALE/2/3600,\
+                            GalaxyCoords[3]+PIXSCALE/2/3600)
+            if filters[k]=="f160w":
+                print('extentGalaxy',extentGalaxy)
+                print('ExtentModel',ExtentModel)
+                figM,axM = mpl.subplots(1,2,figsize=(24,10))
+                figM.subplots_adjust(wspace=0)
+                axM[0].imshow(galaxy[filters[k]].cutout,extent=extentGalaxy,cmap="cividis",vmin=-1e-3,vmax=0.1)
+                CT = axM[0].contour(MagnificationMap[:,::-1],levels=[5,6,7,8,9],extent=ExtentModel,cmap="Reds")#np.logspace(np.log10(2),np.log10(30),15)
+                mpl.clabel(CT,inline=True,fontsize=15,fmt=r"$\mu=%3.1f$")
+                ticks = [5,6,7,8,9]
+                MAP = axM[1].imshow(MagnificationMap[:,::-1],extent=ExtentModel,cmap="cividis",vmin=ticks[0],vmax=ticks[-1])
+                cb = mpl.colorbar(MAP ,ax=axM[1], ticks=ticks)
+                cb.ax.set_yticklabels([f"<{ticks[0]}"]+[f"{i}" for i in ticks[1:-1]]+[f">{ticks[-1]}"])
+
+                axM[0].set_title(filters[k],fontsize=16)
+                axM[1].set_title(r"$\mu(x,y)$",fontsize=16)
+                figM.suptitle(galName,fontsize=18)
+                for eixo in axM:
+                    eixo.tick_params(labelleft=False,labelbottom=False)
+                lensing.saveMagnifcationCutout(f"{galName}/{galName}_magmap.fits",MagnificationMap,ModelCoords,pixScaleLensStack)
 
             medWeight = np.nanmedian(weights[filters[k]].cutout)
             wht = weights[filters[k]].cutout
@@ -747,10 +628,14 @@ if __name__== "__main__":
             detImage[filters[k]],_ = snd.label(mask+objImage[filters[k]])
             maskImage[filters[k]] = snd.binary_dilation(mask,structure=np.ones([5,5]))
 
-            ax[0,k].set_title(filters[k])
-            axF[k].set_title(filters[k])
-            axF[k].imshow(galaxy[filters[k]].cutout[EDGE:-EDGE,EDGE:-EDGE])
-            axF[k].grid(True,color="white",alpha=0.15)
+            ax[0,k].set_title(filters[k],fontsize=16)
+            axF[k].set_title(filters[k],fontsize=16)
+            axF[k].imshow(galaxy[filters[k]].cutout,extent=extentGalaxy)
+            # axF[k].grid(True,color="white",alpha=0.15)
+            CT = axF[k].contour(MagnificationMap[:,::-1],levels=[5,6,7,8,9],extent=ExtentModel,cmap="Reds",linewidths=0.5)
+            # mpl.clabel(CT,inline=True,fontsize=15,fmt=r"$\mu=%3.1f$")
+
+
             ax[0,k].imshow(galaxy[filters[k]].cutout[EDGE:-EDGE,EDGE:-EDGE])
             ax[1,k].imshow(weights[filters[k]].cutout[EDGE:-EDGE,EDGE:-EDGE])
             ax[2,k].imshow(rmsMap[filters[k]][EDGE:-EDGE,EDGE:-EDGE])
@@ -764,7 +649,11 @@ if __name__== "__main__":
             eixo.set_xticks([])
             eixo.set_yticks([])
 
-        figF.savefig(f"debugResults/{galName}_multi-wavelength_original.png")
+        for eixo in axF.ravel():
+            eixo.tick_params(labelleft=False,labelbottom=False)
+
+        figF.savefig(f"{galName}/{galName}_multi-wavelength_psfMatched_wMagnification.png")
+        figM.savefig(f"{galName}/{galName}_magnification_map.png")
 
         print("\tStoring in File...")
         for k in range(len(filters)):
@@ -772,7 +661,7 @@ if __name__== "__main__":
             galaxyData = fout.create_group(f"{filters[k]}")
             galaxyData.create_dataset("galaxy",data=galaxy[filters[k]].cutout[EDGE:-EDGE,EDGE:-EDGE])
             galaxyData.create_dataset("mask",data=maskImage[filters[k]][EDGE:-EDGE,EDGE:-EDGE])
-            galaxyData.create_dataset("psf",data=psfImage[filters[k]])
+            galaxyData.create_dataset("psf",data=psfImage[filters[k]][EDGE:-EDGE,EDGE:-EDGE])
             galaxyData.create_dataset("weights",data=weights[filters[k]].cutout[EDGE:-EDGE,EDGE:-EDGE])
             galaxyData.create_dataset("sigma",data=rmsMap[filters[k]][EDGE:-EDGE,EDGE:-EDGE])
             galaxyData.create_dataset("labels",data=detImage[filters[k]][EDGE:-EDGE,EDGE:-EDGE])

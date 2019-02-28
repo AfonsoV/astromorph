@@ -2,6 +2,7 @@ import numpy as np
 import astropy.io.fits as pyfits
 import astropy.wcs as pywcs
 import matplotlib.pyplot as mpl
+import scipy.interpolate as sip
 
 from . import utils
 from . import plot_utils as putils
@@ -463,12 +464,12 @@ def stack_models(models,raExtent,decExtent,size=None,scale=None,modelbbox=None):
     # modelstack =  np.nanmedian(modelGrid,axis=-1)
     return np.nanpercentile(modelGrid,[16,50,84],axis=-1),extentStack
 
-def saveMagnifcationCutout(fname,magmap,extent):
+def saveMagnifcationCutout(fname,magmap,extent,pixscale):
 
     w = pywcs.WCS(naxis=2)
 
     w.wcs.crpix = [1,1]
-    w.wcs.cdelt = np.array([pixScaleLensStack/3600, pixScaleLensStack/3600])
+    w.wcs.cdelt = np.array([pixscale/3600, pixscale/3600])
     w.wcs.crval = [extent[0], extent[2]]
     w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
     # w.wcs.set_pv([(2, 1, 45.0)])

@@ -14,7 +14,7 @@ from astropy import units as u
 from astromorph import utils, galfit,simulation, lensing
 from astromorph import plot_utils as putils
 from astromorph.lensing import LensingModel
-from astromorph.Galaxy import Galaxy
+from astromorph.Galaxy import Galaxy,create_sigma_image,stack_images
 from astromorph.clumps import ClumpFinder
 import astromorph.cosmology as cosmos
 import scipy.ndimage as snd
@@ -25,154 +25,7 @@ import h5py
 from astropy.modeling import models, fitting
 
 
-# from easyOutput import eazyResults
-
-def create_sigma_image(img,gain,ncombine=1):
-    sky_med,sky_std = utils.sky_value(img)
-
-    img_to_electrons = img*gain*ncombine
-    pre_sigma = np.sqrt(img_to_electrons*img_to_electrons+sky_std*sky_std)
-    sigma = np.sqrt(pre_sigma)/gain
-    return sigma
-
-def regularized_coordinates(xmin,xmax,ymin,ymax,image):
-    if ymin<0:
-        return False
-    if xmin<0:
-        return False
-    if ymax>image.shape[0]:
-        return False
-    if xmax>image.shape[1]:
-        return False
-    return True
-
-def stack_models(models,raExtent,decExtent,size=None,scale=None,modelbbox=None):
-    if size is None and scale is None:
-        raise ValueError("Either size or pixscale must be defined")
-
-    if scale is not None:
-        raGrid = np.arange(raExtent[0],raExtent[1]+scale,scale)
-        decGrid = np.arange(decExtent[0],decExtent[1]+scale,scale)
-    elif size is not None:
-        raGrid = np.linspace(raExtent[0],raExtent[1],size)
-        decGrid = np.linspace(decExtent[0],decExtent[1],size)
-
-    # print(raExtent,raGrid.size)
-    # print(decExtent,decGrid.size)
-
-    modelGrid = np.zeros([4,decGrid.size,raGrid.size,len(models)])
-
-    for i in range(len(models)):
-        # print("Model",i+1)
-        if models[i].kappa_at_z is None:
-            kappa = models[i].kappa
-            gamma = models[i].gamma
-            xdeflect = models[i].xdeflect
-            ydeflect = models[i].ydeflect
-        else:
-            kappa = models[i].kappa_at_z
-            gamma = models[i].gamma_at_z
-            xdeflect = models[i].xdeflect_at_z
-            ydeflect = models[i].ydeflect_at_z
-
-        if xdeflect is None:
-            #If not present in model files, ignore
-            xdeflect = np.ones_like(kappa)*np.nan
-            ydeflect = np.ones_like(kappa)*np.nan
-
-        if modelbbox is None:
-            modelExtent = models[i].get_image_box_coordinates()
-            raModel = np.linspace(modelExtent[0],modelExtent[1],\
-                                  models[i].gamma.shape[1])
-            decModel = np.linspace(modelExtent[2],modelExtent[3],\
-                                   models[i].gamma.shape[0])
-        else:
-            size,coords = modelbbox
-            try:
-                xl,xu,yl,yu = models[i].set_bounding_box(size,coords)
-                raModel = np.linspace(coords.ra.value-size/(2*3600.),\
-                                      coords.ra.value+size/(2*3600.),xu-xl)
-                decModel = np.linspace(coords.dec.value-size/(2*3600.),\
-                                       coords.dec.value+size/(2*3600.),yu-yl)
-
-                if not regularized_coordinates(xl,xu,yl,yu,kappa):
-                    padWidth = int(size/models[i].pixelScale)
-                    kappaPadded = np.pad(kappa,padWidth,mode="constant",\
-                                         constant_values=np.nan)
-                    gammaPadded = np.pad(gamma,padWidth,mode="constant",\
-                                         constant_values=np.nan)
-                    xdeflectPadded = np.pad(xdeflect,padWidth,mode="constant",\
-                                         constant_values=np.nan)
-                    ydeflectPadded = np.pad(ydeflect,padWidth,mode="constant",\
-                                         constant_values=np.nan)
-                    xl += padWidth
-                    xu += padWidth
-                    yl += padWidth
-                    yu += padWidth
-                    kappa = kappaPadded[yl:yu,xl:xu]
-                    gamma = gammaPadded[yl:yu,xl:xu]
-                    xdeflect = xdeflectPadded[yl:yu,xl:xu]
-                    ydeflect = ydeflectPadded[yl:yu,xl:xu]
-                else:
-                    kappa = kappa[yl:yu,xl:xu]
-                    gamma = gamma[yl:yu,xl:xu]
-                    xdeflect = xdeflect[yl:yu,xl:xu]
-                    ydeflect = ydeflect[yl:yu,xl:xu]
-
-            except IndexError as err:
-                kappa = None
-                gamma = None
-                xdeflect = None
-                ydeflect = None
-                print(err)
-
-
-        for k,modelVariable in enumerate([kappa,gamma,xdeflect,ydeflect]):
-            # print("Variable",k+1,modelVariable.shape)
-            if kappa is None:
-                modelGrid[k,:,:,i] = np.nan*np.ones([decGrid.size,raGrid.size])
-            else:
-                modelInterpolator = sip.interp2d(raModel,decModel,modelVariable,\
-                                        bounds_error=False,fill_value=np.nan)
-                modelGrid[k,:,:,i] = modelInterpolator(raGrid,decGrid)[:,::-1]
-
-    # print(modelGrid.shape)
-    # return np.nanmedian(modelGrid,axis=-1)
-    return np.nanpercentile(modelGrid,[16,50,84],axis=-1)
-
-def stack_images(images,raExtent,decExtent,size,weights=None,norm=None):
-    raGrid = np.linspace(raExtent[0],raExtent[1],size)
-    decGrid = np.linspace(decExtent[0],decExtent[1],size)
-    modelGrid = np.zeros([raGrid.size,decGrid.size,len(images)])
-    if weights is not None:
-        modelWeights = np.zeros([raGrid.size,decGrid.size,len(images)])
-
-
-    for i in range(len(images)):
-        imageExtent = images[i].get_bounding_box_coordinates()
-        raModel = np.linspace(imageExtent[0],imageExtent[1],images[i].cutout.shape[1])
-        decModel = np.linspace(imageExtent[2],imageExtent[3],images[i].cutout.shape[0])
-        modelInterpolator = sip.interp2d(raModel,decModel,images[i].cutout,bounds_error=False,fill_value=np.nan)
-
-        if weights is not None and len(weights)==len(images):
-            weightsInterpolator = sip.interp2d(raModel,decModel,weights[i].cutout,bounds_error=False,fill_value=np.nan)
-            modelWeights[:,:,i] = weightsInterpolator(raGrid,decGrid)[:,::-1]
-        elif weights is not None:
-            raise ValueError("Invalid size for weight list. Must be the same as input images")
-
-        modelGrid[:,:,i] = modelInterpolator(raGrid,decGrid)[:,::-1]
-        modelGrid[modelGrid==0]=np.nan
-
-        if norm is not None and len(norm)==len(images):
-            modelGrid[:,:,i] *= norm[i]
-        elif norm is not None:
-            raise ValueError("Invalid size for norm list. Must be the same as input images")
-
-    if weights is None:
-        return np.nanmedian(modelGrid,axis=-1)
-    else:
-        return np.nansum(modelGrid*modelWeights,axis=-1)/np.nansum(modelWeights,axis=-1)
-
+from easyOutput import eazyResults
 
 def getRegionData(images,filters,segmap,weights=None,debugRegion=None):
 
@@ -180,7 +33,6 @@ def getRegionData(images,filters,segmap,weights=None,debugRegion=None):
 
     mask = segmap.copy()
     mask[segmap>0]=1
-
 
 
     img_xc,img_yc = segmap.shape[1]/2,segmap.shape[0]/2
@@ -376,6 +228,7 @@ def find_all_models(dataFolder,rejectList=[]):
 
 def select_cluster(galName):
     root = galName.split("-")[0]
+
     if "A370" in root:
         return "abell370"
     elif "A2744" in root:
@@ -400,38 +253,37 @@ if __name__== "__main__":
     MAGZP = 26.0
     EXPTIME = 1
     MASK_RADIUS = 0.25
-    EDGE = int(0.2/PIXSCALE)
+    EDGE = int(0.06/PIXSCALE)
     GAIN = 2.5
     PSFTRIM = 41
 
     catname = sys.argv[1]
-    # rootDataFolder ="/data2/bribeiro/HubbleFrontierFields/deepspace"
-    rootDataFolder="../../data/deepspace/"
+    rootDataFolder ="/data2/bribeiro/HubbleFrontierFields/deepspace"
 
     filters=["f435w","f606w","f814w","f105w","f125w","f140w","f160w"]
     filtersStack = ["f105w","f125w","f140w","f160w"]
     allClusters = ["abell370","abell2744","abell1063","macs0416","macs0717","macs1149"]
 
 
-    # zphotCatalogs = { "%s"%(c):eazyResults("%s/%sclu_catalogs/eazy/%sclu_v3.9"%(rootDataFolder,c,c),\
-    #                  "%sclu_v3.9"%(c)) for c in allClusters}
+    zphotCatalogs = { "%s"%(c):eazyResults("%s/%sclu_catalogs/eazy/%sclu_v3.9"%(rootDataFolder,c,c),\
+                     "%sclu_v3.9"%(c)) for c in allClusters}
 
     photCatalogs = {"%s"%(c):Table.read("%s/%sclu_catalogs/hffds_%sclu_v3.9.cat"%(rootDataFolder,c,c),format="ascii")\
                      for c in allClusters}
 
 
-    # parent_catalogs = {"A2744275":read_catalog("./A2744_275C.CAT"),\
-    #                    "A2744336":read_catalog("./A2744_336C.CAT"),\
-    #                    "A370275":read_catalog("./A370_275C.CAT"),\
-    #                    "A370336":read_catalog("./A370_336C.CAT"),\
-    #                    "AS1063275":read_catalog("./AS1063_275C.CAT"),\
-    #                    "AS1063336":read_catalog("./AS1063_336C.CAT"),\
-    #                    "M0416275":read_catalog("./M0416_275C.CAT"),\
-    #                    "M0416336":read_catalog("./M0416_336C.CAT"),\
-    #                    "M0717275":read_catalog("./M0717_275C.CAT"),\
-    #                    "M0717336":read_catalog("./M0717_336C.CAT"),\
-    #                    "M1149275":read_catalog("./M1149_275C.CAT"),\
-    #                    "M1149336":read_catalog("./M1149_336C.CAT")}
+    parent_catalogs = {"A2744275":read_catalog("./A2744_275C.CAT"),\
+                       "A2744336":read_catalog("./A2744_336C.CAT"),\
+                       "A370275":read_catalog("./A370_275C.CAT"),\
+                       "A370336":read_catalog("./A370_336C.CAT"),\
+                       "AS1063275":read_catalog("./AS1063_275C.CAT"),\
+                       "AS1063336":read_catalog("./AS1063_336C.CAT"),\
+                       "M0416275":read_catalog("./M0416_275C.CAT"),\
+                       "M0416336":read_catalog("./M0416_336C.CAT"),\
+                       "M0717275":read_catalog("./M0717_275C.CAT"),\
+                       "M0717336":read_catalog("./M0717_336C.CAT"),\
+                       "M1149275":read_catalog("./M1149_275C.CAT"),\
+                       "M1149336":read_catalog("./M1149_336C.CAT")}
 
 
     # clusters = {"A2744275":"abell2744",\
@@ -515,8 +367,7 @@ if __name__== "__main__":
 
 
 
-        # lens_models_folder = "/data2/bribeiro/HubbleFrontierFields/LensModels/%s"%(cluster)
-        lens_models_folder = "../../data/LensModels/%s"%(cluster)
+        lens_models_folder = "/data2/bribeiro/HubbleFrontierFields/LensModels/%s"%(cluster)
         lensModelNames = find_all_models(lens_models_folder,rejectModels)
         nModels = len(lensModelNames)
         ConfigFile = configparser.ConfigParser()
@@ -554,12 +405,7 @@ if __name__== "__main__":
 
     fout = h5py.File("%s_deepspace_galaxyData.hdf5"%(catname.split(".")[0]),"w")
 
-    testGals = ["A370336-9553634160",\
-                "A370336-9512334561",\
-                "A370336-9533834017",\
-                "A370336-9539455699",\
-                "A370336-9581434094",\
-                "A370336-9505833405"]
+    testGals = []
     # testGals = ["A370336-9488645446","A370336-9541335531",\
     #            "A370336-9531734304","A370275-9495434273",\
     #            "A370275-9493243395","A370336-9576034044",\
@@ -598,14 +444,13 @@ if __name__== "__main__":
         # else:
         #     continue
 
-        galRedshift = catalog["redshift"][num]
+        galRedshift = catalog["z_phot"][num]
         parentCat = catalog
         # clusterCat = clusters[galName.split("-")[0]]
         clusterCat = select_cluster(galName)
-        print(galName,clusterCat)
 
         photoCat = photCatalogs[clusterCat]
-        # eazyCat = zphotCatalogs[clusterCat]
+        eazyCat = zphotCatalogs[clusterCat]
         if clusterCat == "abell1063":
             ### need to update name to match lensing models
             ### image names must be done first
@@ -636,10 +481,14 @@ if __name__== "__main__":
         pixScaleLensStack = 0.2
 
         print("\tStacking Lens Models...")
-        modelStack = stack_models(lensModels,stackRA,stackDEC,\
+        modelStack,ModelCoords = lensing.stack_models(lensModels,stackRA,stackDEC,\
                                   scale=pixScaleLensStack/3600.0,\
-                                  modelbbox=(1.1*SIZE,galPosition))
-        ExtentModel = stackRA+stackDEC
+                                  modelbbox=(2*SIZE,galPosition))
+
+        ExtentModel =  (ModelCoords[1]+pixScaleLensStack/2/3600,\
+                        ModelCoords[0]-pixScaleLensStack/2/3600,\
+                        ModelCoords[2]-pixScaleLensStack/2/3600,\
+                        ModelCoords[3]+pixScaleLensStack/2/3600)
 
         print("\tCreating LensModel Object...")
         LensParsGalaxyFull = []
@@ -647,7 +496,8 @@ if __name__== "__main__":
             LensingModelStacked = LensingModel(lensRedshift,pixScaleLensStack)
             LensingModelStacked.set_lensing_data(kappa=modelStack[i,0,:,:],gamma=modelStack[i,1,:,:],\
                                                  xdeflect=modelStack[i,2,:,:],ydeflect=modelStack[i,3,:,:],\
-                                                 extent=ExtentModel)
+                                                 extent=ModelCoords)
+
             LensingModelStacked.set_model_at_z(galRedshift)
             LensingModelStacked.compute_shear_angle(galRedshift)
             LensParsGalaxy = LensingModelStacked.get_lensing_parameters_at_position(galPosition)
@@ -684,7 +534,7 @@ if __name__== "__main__":
         #
         #
         #
-        stackedGAL = stack_images([galaxy[f] for f in filtersStack],\
+        stackedGAL =  stack_images([galaxy[f] for f in filtersStack],\
                                   stackRA,stackDEC,int(SIZE/PIXSCALE),\
                                   weights=[weights[f] for f in filtersStack],\
                                   norm = [10**(-0.4*(zeropoints[f]-MAGZP)) for f in filtersStack])
@@ -763,7 +613,7 @@ if __name__== "__main__":
         sigimage = create_sigma_image(stackedGAL*stackedWEIGHTS,2.5)
         # pre_sigma = np.sqrt(stackedGAL*stackedGAL+stackedRMS*stackedRMS)
         # sigimage = np.sqrt(pre_sigma)
-        psfimage = stack_psf(clusterCat,filtersStack,weights)
+        psfimage = stack_psf(cluster,filtersStack,weights)
 
 
         regionMeasurements = getRegionData(galaxy,filters,segmap,weights=weights)

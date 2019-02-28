@@ -14,6 +14,7 @@ from astropy.modeling import models, fitting
 import warnings
 fitterLSQ = fitting.LevMarLSQFitter()
 from scipy.optimize import leastsq,OptimizeWarning
+import scipy.interpolate as sip
 
 import time
 import emcee
