@@ -1536,3 +1536,48 @@ def plot_results(sampler,pars,ntemps=None):
     ax[-1].set_xlabel(r'$N_\mathrm{sol}$')
 
     return fig,ax
+
+
+
+
+def create_sigma_image(img,gain,ncombine=1):
+
+    img_to_electrons = img*gain*ncombine
+    sky_med,sky_std = utils.sky_value(img_to_electrons)
+
+    pre_sigma = np.sqrt(img_to_electrons*img_to_electrons+sky_std*sky_std)
+    sigma = np.sqrt(pre_sigma/gain)
+    return sigma
+
+def stack_images(images,raExtent,decExtent,size,weights=None,norm=None):
+    raGrid = np.linspace(raExtent[0],raExtent[1],size)
+    decGrid = np.linspace(decExtent[0],decExtent[1],size)
+    modelGrid = np.zeros([raGrid.size,decGrid.size,len(images)])
+    if weights is not None:
+        modelWeights = np.zeros([raGrid.size,decGrid.size,len(images)])
+
+
+    for i in range(len(images)):
+        imageExtent = images[i].get_bounding_box_coordinates()
+        raModel = np.linspace(imageExtent[0],imageExtent[1],images[i].cutout.shape[1])
+        decModel = np.linspace(imageExtent[2],imageExtent[3],images[i].cutout.shape[0])
+        modelInterpolator = sip.interp2d(raModel,decModel,images[i].cutout,bounds_error=False,fill_value=np.nan)
+
+        if weights is not None and len(weights)==len(images):
+            weightsInterpolator = sip.interp2d(raModel,decModel,weights[i].cutout,bounds_error=False,fill_value=np.nan)
+            modelWeights[:,:,i] = weightsInterpolator(raGrid,decGrid)[:,::-1]
+        elif weights is not None:
+            raise ValueError("Invalid size for weight list. Must be the same as input images")
+
+        modelGrid[:,:,i] = modelInterpolator(raGrid,decGrid)[:,::-1]
+        modelGrid[modelGrid==0]=np.nan
+
+        if norm is not None and len(norm)==len(images):
+            modelGrid[:,:,i] *= norm[i]
+        elif norm is not None:
+            raise ValueError("Invalid size for norm list. Must be the same as input images")
+
+    if weights is None:
+        return np.nanmedian(modelGrid,axis=-1)
+    else:
+        return np.nansum(modelGrid*modelWeights,axis=-1)/np.nansum(modelWeights,axis=-1)

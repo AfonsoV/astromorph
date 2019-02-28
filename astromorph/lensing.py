@@ -134,14 +134,38 @@ class LensingModel(object):
             dec = np.linspace(self.modelExtent[2],self.modelExtent[3],self.gamma.shape[0])
             ky = np.where(ra>coords.ra.value)[0][0]
             kx = np.where(dec>coords.dec.value)[0][0]
-            hsize = int(size/pixelScale)//2
-            xl = int(kx-hsize)
-            xu = int(kx+hsize)
-            yl = int(ky-hsize)
-            yu = int(ky+hsize)
+            hsize = (size/pixelScale)/2
+            xl = int(np.floor(kx-hsize))
+            xu = int(np.ceil(kx+hsize))
+            yl = int(np.floor(ky-hsize))
+            yu = int(np.ceil(ky+hsize))
             return (xl,xu,yl,yu)
         else:
             raise ModelError("Neither a file nor an extent set is defined for this model to get coordinates from.")
+
+    def get_bounding_box_coordinates(self,bounding_box):
+        r"""
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        References
+        ----------
+
+        Examples
+        --------
+
+        """
+        header = self.header
+        x0,x1,y0,y1=bounding_box
+        wcs=pywcs.WCS(header)
+        pixCoords=wcs.wcs_pix2world([[x0,y0],[x1,y1]],1)
+        pixLow = pixCoords[0]
+        pixHig = pixCoords[1]
+        return (pixLow[0],pixHig[0],pixLow[1],pixHig[1])
 
     def get_image_box_coordinates(self):
         r"""
@@ -321,3 +345,136 @@ class LensingModel(object):
                 eixo.tick_params(labelleft=False,labelbottom=False)
 
         return (medKappa,medGamma,medMu,medAngle)
+
+
+
+def regularized_coordinates(xmin,xmax,ymin,ymax,image):
+    if ymin<0:
+        return False
+    if xmin<0:
+        return False
+    if ymax>image.shape[0]:
+        return False
+    if xmax>image.shape[1]:
+        return False
+    return True
+
+def stack_models(models,raExtent,decExtent,size=None,scale=None,modelbbox=None):
+    if size is None and scale is None:
+        raise ValueError("Either size or pixscale must be defined")
+
+    if scale is not None:
+        raGrid = np.arange(raExtent[0],raExtent[1]+scale,scale)
+        decGrid = np.arange(decExtent[0],decExtent[1]+scale,scale)
+    elif size is not None:
+        raGrid = np.linspace(raExtent[0],raExtent[1],size)
+        decGrid = np.linspace(decExtent[0],decExtent[1],size)
+
+    # print(raExtent,raGrid.size)
+    # print(decExtent,decGrid.size)
+
+    modelGrid = np.zeros([4,decGrid.size,raGrid.size,len(models)])
+    for i in range(len(models)):
+        # print("Model",i+1)
+        if models[i].kappa_at_z is None:
+            kappa = models[i].kappa
+            gamma = models[i].gamma
+            xdeflect = models[i].xdeflect
+            ydeflect = models[i].ydeflect
+        else:
+            kappa = models[i].kappa_at_z
+            gamma = models[i].gamma_at_z
+            xdeflect = models[i].xdeflect_at_z
+            ydeflect = models[i].ydeflect_at_z
+
+        if xdeflect is None:
+            #If not present in model files, ignore
+            xdeflect = np.ones_like(kappa)*np.nan
+            ydeflect = np.ones_like(kappa)*np.nan
+
+        if modelbbox is None:
+            modelExtent = models[i].get_image_box_coordinates()
+            raModel = np.linspace(modelExtent[0],modelExtent[1],\
+                                  models[i].gamma.shape[1])
+            decModel = np.linspace(modelExtent[2],modelExtent[3],\
+                                   models[i].gamma.shape[0])
+        else:
+            size,coords = modelbbox
+            try:
+                xl,xu,yl,yu = models[i].set_bounding_box(size,coords)
+
+                if not regularized_coordinates(xl,xu,yl,yu,kappa):
+                    padWidth = int(size/models[i].pixelScale)
+                    kappaPadded = np.pad(kappa,padWidth,mode="constant",\
+                                         constant_values=np.nan)
+                    gammaPadded = np.pad(gamma,padWidth,mode="constant",\
+                                         constant_values=np.nan)
+                    xdeflectPadded = np.pad(xdeflect,padWidth,mode="constant",\
+                                         constant_values=np.nan)
+                    ydeflectPadded = np.pad(ydeflect,padWidth,mode="constant",\
+                                         constant_values=np.nan)
+                    xl += padWidth
+                    xu += padWidth
+                    yl += padWidth
+                    yu += padWidth
+                    kappa = kappaPadded[yl:yu,xl:xu]
+                    gamma = gammaPadded[yl:yu,xl:xu]
+                    xdeflect = xdeflectPadded[yl:yu,xl:xu]
+                    ydeflect = ydeflectPadded[yl:yu,xl:xu]
+                else:
+                    kappa = kappa[yl:yu,xl:xu]
+                    gamma = gamma[yl:yu,xl:xu]
+                    xdeflect = xdeflect[yl:yu,xl:xu]
+                    ydeflect = ydeflect[yl:yu,xl:xu]
+
+                N,M = kappa.shape
+                bbox =(xl,xu,yl,yu )
+                extentModel = models[i].get_bounding_box_coordinates(bbox)
+                # raModel = np.linspace(coords.ra.value-size/(2*3600.),\
+                #                       coords.ra.value+size/(2*3600.),M)
+                # decModel = np.linspace(coords.dec.value-size/(2*3600.),\
+                #                        coords.dec.value+size/(2*3600.),N)
+                raModel = np.linspace(extentModel[0],\
+                                      extentModel[1],M)
+                decModel = np.linspace(extentModel[2],\
+                                       extentModel[3],N)
+
+            except IndexError as err:
+                kappa = None
+                gamma = None
+                xdeflect = None
+                ydeflect = None
+                print(err)
+
+
+        for k,modelVariable in enumerate([kappa,gamma,xdeflect,ydeflect]):
+            # print("Variable",k+1,modelVariable.shape)
+            if kappa is None:
+                modelGrid[k,:,:,i] = np.nan*np.ones([decGrid.size,raGrid.size])
+            else:
+                # print(raModel.shape,decModel.shape,modelVariable.shape)
+                # modelInterpolator = sip.interp2d(raModel,decModel,modelVariable,\
+                #                         bounds_error=False,fill_value=np.nan)
+                modelInterpolator = sip.RectBivariateSpline(decModel,raModel[::-1],modelVariable,kx=1,ky=1)
+                modelGrid[k,:,:,i] = modelInterpolator(decGrid,raGrid)[:,::-1]
+
+    extentStack = (raGrid[0],raGrid[-1],decGrid[0],decGrid[-1])
+    print("extentStack",extentStack)
+    # modelstack =  np.nanmedian(modelGrid,axis=-1)
+    return np.nanpercentile(modelGrid,[16,50,84],axis=-1),extentStack
+
+def saveMagnifcationCutout(fname,magmap,extent):
+
+    w = pywcs.WCS(naxis=2)
+
+    w.wcs.crpix = [1,1]
+    w.wcs.cdelt = np.array([pixScaleLensStack/3600, pixScaleLensStack/3600])
+    w.wcs.crval = [extent[0], extent[2]]
+    w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+    # w.wcs.set_pv([(2, 1, 45.0)])
+
+    header = w.to_header()
+
+    hdu = pyfits.PrimaryHDU(magmap,header=header)
+    hdu.writeto(fname,overwrite=True)
+    return hdu

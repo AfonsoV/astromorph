@@ -1837,16 +1837,16 @@ def get_bounding_box(header,coords,size,pixelscale):
                                                    coords.dec.value)
 
     if isinstance(size,tuple):
-        hsizex = int(size[0]/pixelscale)//2
-        hsizey = int(size[1]/pixelscale)//2
+        hsizex = (size[0]/pixelscale)/2
+        hsizey = (size[1]/pixelscale)/2
     else:
-        hsizex = int(size/pixelscale)//2
+        hsizex = (size/pixelscale)/2
         hsizey=hsizex
 
-    xl = int(centerCoords[0]-hsizex)
-    xu = int(centerCoords[0]+hsizex)
-    yl = int(centerCoords[1]-hsizey)
-    yu = int(centerCoords[1]+hsizey)
+    xl = int(np.floor(centerCoords[0]-hsizex))
+    xu = int(np.ceil(centerCoords[0]+hsizex))
+    yl = int(np.floor(centerCoords[1]-hsizey))
+    yu = int(np.ceil(centerCoords[1]+hsizey))
     return (xl,xu,yl,yu)
 
 def get_cutout(imgname,coords,size,pixelscale):
