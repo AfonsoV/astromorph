@@ -360,7 +360,7 @@ def regularized_coordinates(xmin,xmax,ymin,ymax,image):
         return False
     return True
 
-def stack_models(models,raExtent,decExtent,size=None,scale=None,modelbbox=None):
+def stack_models(models,raExtent,decExtent,size=None,scale=None,modelbbox=None,debug=False):
     if size is None and scale is None:
         raise ValueError("Either size or pixscale must be defined")
 
@@ -373,6 +373,9 @@ def stack_models(models,raExtent,decExtent,size=None,scale=None,modelbbox=None):
 
     # print(raExtent,raGrid.size)
     # print(decExtent,decGrid.size)
+
+    if debug is True:
+        fig, ax = mpl.subplots(2,len(models)+1,figsize=(5*len(models),5))
 
     modelGrid = np.zeros([4,decGrid.size,raGrid.size,len(models)])
     for i in range(len(models)):
@@ -457,7 +460,15 @@ def stack_models(models,raExtent,decExtent,size=None,scale=None,modelbbox=None):
                 # modelInterpolator = sip.interp2d(raModel,decModel,modelVariable,\
                 #                         bounds_error=False,fill_value=np.nan)
                 modelInterpolator = sip.RectBivariateSpline(decModel,raModel[::-1],modelVariable,kx=1,ky=1)
-                modelGrid[k,:,:,i] = modelInterpolator(decGrid,raGrid)[:,::-1]
+                modelGrid[k,:,:,i] = modelInterpolator(decGrid,raGrid)[:,:]
+
+                if k == 0 and debug is True:
+                    ax[1,i].imshow(modelGrid[k,:,:,i])
+                    ax[0,i].imshow(modelVariable)
+
+    if debug is True:
+        ax[1,-1].imshow(np.nanmedian(modelGrid,axis=-1)[0,:,:])
+        ax[0,-1].set_visible(False)
 
     extentStack = (raGrid[0],raGrid[-1],decGrid[0],decGrid[-1])
     print("extentStack",extentStack)
