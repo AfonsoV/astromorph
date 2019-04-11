@@ -374,7 +374,7 @@ class LensedSersicPSFModel(Fittable2DModel):
         else:
             diffN = Npsf - N
             diffM = Npsf - N
-            canvas[diffN//2:-diffN//2,diffM//2:-diffM//2] = self.psf
+            canvas = self.psf[diffN//2:-diffN//2,diffM//2:-diffM//2]
 
 
         xCen,yCen = barycenter(canvas,np.ones_like(canvas))
