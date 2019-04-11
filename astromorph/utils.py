@@ -375,7 +375,7 @@ def get_center_coords(imgname,ra,dec,hsize=1,verify_limits=True):
 
     return get_center_coords_hdr(hdr,ra,dec,hsize=1,verify_limits=verify_limits)
 
-def compute_ellipse_distmat(img,xc,yc,q=1.00,ang=0.00):
+def compute_ellipse_distmat(img,xc,yc,q=1.00,ang=0.00,overSampling = 1):
     r"""Compute a matrix with dimensions of the image where in each pixel we
     have the distance to the center xc,yc.
 
@@ -414,9 +414,9 @@ def compute_ellipse_distmat(img,xc,yc,q=1.00,ang=0.00):
 
     """
     ang_rad = np.radians(ang)
-    X,Y = np.meshgrid(range(img.shape[1]),range(int(img.shape[0])))
-    rX=(X-xc)*np.cos(ang_rad)-(Y-yc)*np.sin(ang_rad)
-    rY=(X-xc)*np.sin(ang_rad)+(Y-yc)*np.cos(ang_rad)
+    X,Y = np.meshgrid(np.arange(img.shape[0]*overSampling),np.arange(img.shape[1]*overSampling))
+    rX=(X-xc*overSampling)/overSampling*np.cos(ang_rad)-(Y-yc*overSampling)/overSampling*np.sin(ang_rad)
+    rY=(X-xc*overSampling)/overSampling*np.sin(ang_rad)+(Y-yc*overSampling)/overSampling*np.cos(ang_rad)
     dmat = np.sqrt(rX*rX+(1/(q*q))*rY*rY)
     return dmat
 
