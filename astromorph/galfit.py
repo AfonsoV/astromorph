@@ -30,7 +30,7 @@ def write_object(model,x,y,m,re,n,ba,pa,num,fixpars=None):
     Parameters
     ----------
     model : str
-        
+
 
     Returns
     -------
@@ -258,13 +258,13 @@ def read_results_file(fname):
     try:
         hdu=pyfits.open(fname)
         chi=hdu[2].header['CHI2NU']
-        xc=hdu[2].header['1_XC'].translate(None,'[*').replace('+/-','').replace(']',' -99.00')
-        yc=hdu[2].header['1_YC'].translate(None,'[*').replace('+/-','').replace(']',' -99.00')
-        M=hdu[2].header['1_MAG'].translate(None,'[*').replace('+/-','').replace(']',' -99.00')
-        R=hdu[2].header['1_RE'].translate(None,'[*').replace('+/-','').replace(']',' -99.00')
-        N=hdu[2].header['1_N'].translate(None,'[*').replace('+/-','').replace(']',' -99.00')
-        Q=hdu[2].header['1_AR'].translate(None,'[*').replace('+/-','').replace(']',' -99.00')
-        T=hdu[2].header['1_PA'].translate(None,'[*').replace('+/-','').replace(']',' -99.00')
+        xc=hdu[2].header['1_XC'].replace('[','').replace('*','').replace('+/-','').replace(']',' -99.00')
+        yc=hdu[2].header['1_YC'].replace('[','').replace('*','').replace('+/-','').replace(']',' -99.00')
+        M=hdu[2].header['1_MAG'].replace('[','').replace('*','').replace('+/-','').replace(']',' -99.00')
+        R=hdu[2].header['1_RE'].replace('[','').replace('*','').replace('+/-','').replace(']',' -99.00')
+        N=hdu[2].header['1_N'].replace('[','').replace('*','').replace('+/-','').replace(']',' -99.00')
+        Q=hdu[2].header['1_AR'].replace('[','').replace('*','').replace('+/-','').replace(']',' -99.00')
+        T=hdu[2].header['1_PA'].replace('[','').replace('*','').replace('+/-','').replace(']',' -99.00')
         F= hdu[2].header['FLAGS'].replace(' ',',')
         if ('1' in F.split(',')):
             F=1
