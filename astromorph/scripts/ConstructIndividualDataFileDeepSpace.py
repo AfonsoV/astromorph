@@ -8,7 +8,6 @@ import matplotlib.ticker as mpt
 import matplotlib.cm as cm
 import matplotlib.patches as mpp
 import astropy.io.fits as pyfits
-import astropy.wcs as pywcs
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy import units as u
