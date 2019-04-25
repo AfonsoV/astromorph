@@ -2,6 +2,8 @@ import numpy as np
 from . import utils
 import matplotlib.pyplot as mpl
 
+import scipy.ndimage as snd
+from skimage.morphology import watershed
 
 
 class ClumpFinder:
@@ -9,9 +11,8 @@ class ClumpFinder:
     THRESHOLD = 3.0
     LEVELS = np.arange(0.1,1.0,0.05)
 
-    def __init__(self,image,segmap,pixelscale):
-        self.data = image
-        self.detection_map = segmap
+    def __init__(self,image,pixelscale,sigma=0.25):
+        self.data = snd.gaussian_filter(image,sigma=sigma)
         self.pixelscale = pixelscale
 
         self.set_threshold()
@@ -54,18 +55,53 @@ class ClumpFinder:
         fmaps.append(segmap)
         return fmaps,FullMap
 
+    def identify_clumps(self,segmap):
+        labels,nclumps = snd.label(segmap)
+        positions_max = []
+        for i in range(nclumps):
+
+            single_clump_map=np.zeros_like(segmap)
+            single_clump_map[labels==(i+1)]=1
+            posmax = np.where(self.data*single_clump_map==np.amax(self.data*single_clump_map))
+
+
+
+            if np.size(posmax)>2:
+                x  = int(np.mean(posmax[0]))
+                y  = int(np.mean(posmax[1]))
+                positions_max.append((x,y))
+            else:
+                x = posmax[0][0]
+                y = posmax[1][0]
+                positions_max.append((x,y))
+        return positions_max
+
     def clump_segmentation(self, threshold = None):
         N,M = self.data.shape
         smap = utils.gen_segmap_tresh(self.data,N/2,M/2,self.pixelscale,\
                                       thresh=self.threshold,\
                                       all_detection=True)
+
         nGals = np.amax(smap)
         FullMap = np.zeros_like(smap,dtype=np.float32)
+        FullPositions = []
         for i in range(nGals):
             singleGalaxyMap = np.zeros_like(smap)
             singleGalaxyMap[smap==i+1] = 1
 
             AllMaps,SummedMap = self.segmap_levels(singleGalaxyMap)
+            for cmap in AllMaps:
+                pos = self.identify_clumps(cmap)
+                FullPositions += pos
+
             FullMap += SummedMap
 
-        return FullMap
+        peaksImage = np.zeros_like(smap)
+        ClumpPeaks = set(FullPositions)
+        for cp in ClumpPeaks:
+            x,y = cp
+            peaksImage[x,y] = 1
+
+        markers = snd.label(peaksImage)[0]
+        labels = watershed(-FullMap, markers, mask=smap)
+        return FullMap, peaksImage, labels
