@@ -1563,9 +1563,13 @@ def stack_images(images,raExtent,decExtent,size,weights=None,norm=None):
         raModel = np.linspace(imageExtent[0],imageExtent[1],images[i].cutout.shape[1])
         decModel = np.linspace(imageExtent[2],imageExtent[3],images[i].cutout.shape[0])
         modelInterpolator = sip.interp2d(raModel,decModel,images[i].cutout,bounds_error=False,fill_value=np.nan)
+        # modelInterpolator = sip.RectBivariateSpline(decModel,raModel[::-1],images[i].cutout,kx=1,ky=1)
 
         if weights is not None and len(weights)==len(images):
+            raModel = np.linspace(imageExtent[0],imageExtent[1],weights[i].cutout.shape[1])
+            decModel = np.linspace(imageExtent[2],imageExtent[3],weights[i].cutout.shape[0])
             weightsInterpolator = sip.interp2d(raModel,decModel,weights[i].cutout,bounds_error=False,fill_value=np.nan)
+            # weightsInterpolator = sip.RectBivariateSpline(decModel,raModel[::-1],weights[i].cutout,kx=1,ky=1)
             modelWeights[:,:,i] = weightsInterpolator(raGrid,decGrid)[:,::-1]
         elif weights is not None:
             raise ValueError("Invalid size for weight list. Must be the same as input images")
