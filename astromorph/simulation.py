@@ -241,7 +241,7 @@ def test_sersic():
     mpl.show()
     return
 
-def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,exposure_time,psf=None,OverSampling = 3,debug=False):
+def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,exposure_time,psf=None,OverSampling = 5,debug=False):
     r"""
 
     Parameters
@@ -319,7 +319,7 @@ def generate_lensed_sersic_model(shape,modelPars,lensingPars,mag_zeropoint,expos
         return Profile
 
 
-def generate_sersic_model(shape,modelPars,mag_zeropoint,exposure_time,psf=None):
+def generate_sersic_model(shape,modelPars,mag_zeropoint,exposure_time,psf=None,overSampling=1):
     r"""
 
     Parameters
@@ -339,10 +339,10 @@ def generate_sersic_model(shape,modelPars,mag_zeropoint,exposure_time,psf=None):
     totalFlux = exposure_time * 10**( -0.4*(mag-mag_zeropoint) )
     Sigma_e = effective_intensity(totalFlux,radius,sersic_index)
     return galaxy_creation(shape,xc,yc,Sigma_e,radius,sersic_index,axis_ratio,\
-                            position_angle,psf=psf)
+                            position_angle,psf=psf,overSampling=overSampling)
 
 ##
-def galaxy_creation(imsize,xc,yc,I,r,n,q,theta,psf=None,**kwargs):
+def galaxy_creation(imsize,xc,yc,I,r,n,q,theta,psf=None,overSampling=1):
     r"""
 
     Parameters
@@ -358,9 +358,12 @@ def galaxy_creation(imsize,xc,yc,I,r,n,q,theta,psf=None,**kwargs):
     --------
 
     """
-    R = utils.compute_ellipse_distmat(np.zeros(imsize),xc,yc,q,theta)
+    R = utils.compute_ellipse_distmat(np.zeros(imsize),xc,yc,q,theta,overSampling=overSampling)
     profile = sersic(R,I,r,n)
 
+    if overSampling != 1:
+        profile = profile.reshape(imsize[0],overSampling,\
+                               imsize[1],overSampling).sum(3).sum(1)/(overSampling**2)
     if psf is None:
         galaxy = profile
     else:
@@ -956,7 +959,8 @@ def test_max_intensity():
 ##test_max_intensity()
 
 ######################################################################
-###################################################################### General PSF
+###################################################################### General
+
 ######################################################################
 
 def create_gaussian_PSF(fwhm,**kwargs):

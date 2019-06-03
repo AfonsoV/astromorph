@@ -18,6 +18,12 @@ colorgrn = "\033[1;32m{0}\033[00m"
 colorblu = "\033[1;34m{0}\033[00m"
 colorylw = "\033[1;33m{0}\033[00m"
 
+CRED = '\033[91m'
+CGREEN = '\033[92m'
+CYELLOW = '\033[93m'
+CBLUE = '\033[94m'
+CEND = '\033[0m'
+
 
 if sys.platform =='darwin':
     SEx_COMMAND = "sex"
@@ -369,7 +375,7 @@ def get_center_coords(imgname,ra,dec,hsize=1,verify_limits=True):
 
     return get_center_coords_hdr(hdr,ra,dec,hsize=1,verify_limits=verify_limits)
 
-def compute_ellipse_distmat(img,xc,yc,q=1.00,ang=0.00):
+def compute_ellipse_distmat(img,xc,yc,q=1.00,ang=0.00,overSampling = 1):
     r"""Compute a matrix with dimensions of the image where in each pixel we
     have the distance to the center xc,yc.
 
@@ -408,9 +414,9 @@ def compute_ellipse_distmat(img,xc,yc,q=1.00,ang=0.00):
 
     """
     ang_rad = np.radians(ang)
-    X,Y = np.meshgrid(range(img.shape[1]),range(int(img.shape[0])))
-    rX=(X-xc)*np.cos(ang_rad)-(Y-yc)*np.sin(ang_rad)
-    rY=(X-xc)*np.sin(ang_rad)+(Y-yc)*np.cos(ang_rad)
+    X,Y = np.meshgrid(np.arange(img.shape[0]*overSampling),np.arange(img.shape[1]*overSampling))
+    rX=(X-xc*overSampling)/overSampling*np.cos(ang_rad)-(Y-yc*overSampling)/overSampling*np.sin(ang_rad)
+    rY=(X-xc*overSampling)/overSampling*np.sin(ang_rad)+(Y-yc*overSampling)/overSampling*np.cos(ang_rad)
     dmat = np.sqrt(rX*rX+(1/(q*q))*rY*rY)
     return dmat
 
@@ -609,9 +615,9 @@ def sky_value(img,k=3):
     media=np.nanmean(img[img!=0])
     dev=np.nanstd(img[img!=0])
     back=img.copy()
-    back=back[back!=0]
+    back=back[(back!=0)*(np.isfinite(back))]
     thresh=media+k*dev
-    npix = img[(img)>=thresh].size
+    npix = img.size
     while npix>0:
         back = back[(back)<thresh]
         media=np.nanmean(back)
@@ -767,7 +773,7 @@ def gen_segmap_watershed(img,thresholds=[100,50,25,15,12,10,7,5,3,2],mSigma=0.75
         sm[sm>0]=1
         segmap += sm
 
-    segmap = sci_nd.gaussian_filter(segmap,sigma=mSigma)
+    segmap = sci_nd.gaussian_filter(segmap.astype(np.float32),sigma=mSigma)
 
     ss = np.ceil(np.sqrt(Amin)).astype(np.int8)
     peaksImage = peak_local_max(segmap, indices=False, footprint=np.ones((ss, ss)),
@@ -865,7 +871,7 @@ def gen_segmap_tresh(img,xc,yc,pixscale,radius =0.5,thresh=5.0,Amin=5,k_sky=3,al
 
 
     if all_detection:
-        return Regions
+        return sci_nd.label(Regions)[0]
     else:
         segmap = select_object_map(xc,yc,Regions,pixscale,radius)
         return sci_nd.binary_dilation(segmap,structure=structure).astype(np.int16)
@@ -1831,16 +1837,16 @@ def get_bounding_box(header,coords,size,pixelscale):
                                                    coords.dec.value)
 
     if isinstance(size,tuple):
-        hsizex = int(size[0]/pixelscale)//2
-        hsizey = int(size[1]/pixelscale)//2
+        hsizex = (size[0]/pixelscale)/2
+        hsizey = (size[1]/pixelscale)/2
     else:
-        hsizex = int(size/pixelscale)//2
+        hsizex = (size/pixelscale)/2
         hsizey=hsizex
 
-    xl = int(centerCoords[0]-hsizex)
-    xu = int(centerCoords[0]+hsizex)
-    yl = int(centerCoords[1]-hsizey)
-    yu = int(centerCoords[1]+hsizey)
+    xl = int(np.floor(centerCoords[0]-hsizex))
+    xu = int(np.ceil(centerCoords[0]+hsizex))
+    yl = int(np.floor(centerCoords[1]-hsizey))
+    yu = int(np.ceil(centerCoords[1]+hsizey))
     return (xl,xu,yl,yu)
 
 def get_cutout(imgname,coords,size,pixelscale):
