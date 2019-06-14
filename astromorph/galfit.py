@@ -25,7 +25,7 @@ def get_fixpars_default():
 
 def write_object(model,x,y,m,re,n,ba,pa,num,fixpars=None):
     r""" Returns a string object containing a general description for a galaxy
-    profile model in GALFIT.
+    profile model in GALFIT, with the input parameters as first guesses.
 
     Parameters
     ----------
