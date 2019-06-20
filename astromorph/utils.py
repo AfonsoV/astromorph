@@ -414,7 +414,7 @@ def compute_ellipse_distmat(img,xc,yc,q=1.00,ang=0.00,overSampling = 1):
 
     """
     ang_rad = np.radians(ang)
-    X,Y = np.mgrid[:img.shape[1]*overSampling,:img.shape[0]*overSampling]
+    X,Y = np.mgrid[:img.shape[0]*overSampling,:img.shape[1]*overSampling]
     rX=(X-xc*overSampling)/overSampling*np.cos(ang_rad)-(Y-yc*overSampling)/overSampling*np.sin(ang_rad)
     rY=(X-xc*overSampling)/overSampling*np.sin(ang_rad)+(Y-yc*overSampling)/overSampling*np.cos(ang_rad)
     dmat = np.sqrt(rX*rX+(1/(q*q))*rY*rY)
