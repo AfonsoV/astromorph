@@ -1353,7 +1353,7 @@ class Galaxy(object):
             model.x_0_0 = initPos[0]
             model.y_0_0 = initPos[1]
             model.I_eff_0 = np.random.lognormal(np.log10(initPars[2]),1.5)
-            model.r_eff_0 = np.random.lognormal(initPars[3],1)
+            model.r_eff_0 = np.random.lognormal(np.log10(initPars[3]),1)
             model.n_0 = 1.0#np.random.lognormal(initPars[4],0.5)
             model.n_0.fixed = True
             model.axratio_0 = initPos[5]
