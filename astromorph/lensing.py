@@ -91,19 +91,19 @@ class LensingModel(object):
         """
         if filename is not None:
             self.modelname = filename
-            self.header = pyfits.getheader("%s_gamma.fits"%(filename))
-            self.gamma = pyfits.getdata("%s_gamma.fits"%(filename))
-            self.kappa = pyfits.getdata("%s_kappa.fits"%(filename))
+            self.header = pyfits.getheader("%s_gamma.fits.gz"%(filename))
+            self.gamma = pyfits.getdata("%s_gamma.fits.gz"%(filename))
+            self.kappa = pyfits.getdata("%s_kappa.fits.gz"%(filename))
             try:
-                self.xdeflect = pyfits.getdata("%s_x-arcsec-deflect.fits"%(filename))
-                self.ydeflect = pyfits.getdata("%s_y-arcsec-deflect.fits"%(filename))
+                self.xdeflect = pyfits.getdata("%s_x-arcsec-deflect.fits.gz"%(filename))
+                self.ydeflect = pyfits.getdata("%s_y-arcsec-deflect.fits.gz"%(filename))
             except IOError:
                 self.xdeflect = None
                 self.ydeflect = None
 
             try:
-                self.gamma1 = pyfits.getdata("%s_gamma1.fits"%(filename))
-                self.gamma2 = pyfits.getdata("%s_gamma2.fits"%(filename))
+                self.gamma1 = pyfits.getdata("%s_gamma1.fits.gz"%(filename))
+                self.gamma2 = pyfits.getdata("%s_gamma2.fits.gz"%(filename))
             except IOError:
                 self.gamma1 = None
                 self.gamma2 = None
